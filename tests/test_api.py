@@ -98,7 +98,7 @@ def test_media_path_confined(client):
 def test_index_served(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert "ALL-SEEING EYE" in r.text
+    assert "MUC.IO ALL SEEING EYE" in r.text
 
 
 def test_ui_files_marked_no_cache(client):

@@ -41,7 +41,6 @@ class CameraView {
 
     const tpl = document.getElementById("camera-template");
     this.root = tpl.content.firstElementChild.cloneNode(true);
-    this.root.querySelector(".cam-name").textContent = info.name;
     this.statusEl = this.root.querySelector(".cam-status");
     this.canvas = this.root.querySelector(".cam-canvas");
     this.ctx = this.canvas.getContext("2d");
@@ -359,7 +358,6 @@ const ui = {
   eventsFocused: false,
   eventsSel: 0,
   eventsCache: [],
-  helpOpen: false,
   confirmClear: false, // "delete ALL events?" pending confirmation
 };
 
@@ -395,11 +393,6 @@ function toggleSolo() {
   document.getElementById("grid").classList.toggle("solo", ui.solo);
 }
 
-function toggleHelp() {
-  ui.helpOpen = !ui.helpOpen;
-  document.getElementById("help").classList.toggle("hidden", !ui.helpOpen);
-}
-
 function setEventsFocus(on) {
   ui.eventsFocused = on;
   if (!on) setConfirmClear(false);
@@ -418,8 +411,6 @@ function moveEventSel(d) {
 async function loadState() {
   const res = await fetch("/api/state");
   const state = await res.json();
-  document.getElementById("site-name").textContent = state.site;
-  document.title = `${state.site} — All-Seeing Eye`;
 
   const sites = document.getElementById("sites");
   sites.innerHTML = "";
@@ -469,11 +460,9 @@ function renderEvents() {
     el.innerHTML = `
       <img loading="lazy" src="/api/media/${ev.snapshot}" alt="">
       <div class="ev-meta">
-        <span class="ev-cam"></span>
         <span class="ev-time"></span>
       </div>
       <button class="ev-del" title="delete this event">&times;</button>`;
-    el.querySelector(".ev-cam").textContent = ev.camera;
     el.querySelector(".ev-time").textContent =
       when.toLocaleDateString() + " " + when.toLocaleTimeString();
     el.addEventListener("click", () => openModal(ev));
@@ -491,7 +480,7 @@ function openModal(ev) {
   const video = document.getElementById("modal-video");
   video.src = `/api/media/${ev.video}`;
   document.getElementById("modal-caption").textContent =
-    `${ev.camera} — ${new Date(ev.start * 1000).toLocaleString()}`;
+    new Date(ev.start * 1000).toLocaleString();
   modal.classList.remove("hidden");
 }
 
@@ -508,21 +497,12 @@ document.getElementById("modal").addEventListener("click", (e) => {
 });
 
 // ---------- the keymap ----------
-// Modes, checked in order: help overlay -> video player -> events list -> grid.
+// Modes, checked in order: video player -> events list -> grid.
+// All bindings are listed in the hint bar under each camera feed.
 
 document.addEventListener("keydown", (e) => {
   const key = e.key;
   const low = key.toLowerCase();
-
-  if (key === "?" || low === "h") {
-    toggleHelp();
-    e.preventDefault();
-    return;
-  }
-  if (ui.helpOpen) {
-    if (key === "Escape" || key === "Enter") toggleHelp();
-    return;
-  }
 
   const modalOpen = !document.getElementById("modal").classList.contains("hidden");
   if (modalOpen) {

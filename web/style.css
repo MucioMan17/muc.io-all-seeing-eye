@@ -33,7 +33,6 @@ body {
 #brand { display: flex; align-items: center; gap: 10px; }
 #eye { font-size: 22px; filter: drop-shadow(0 0 6px var(--accent)); }
 #brand h1 { font-size: 16px; letter-spacing: 3px; font-weight: 700; }
-#site-name { color: var(--accent); font-size: 13px; letter-spacing: 1px; }
 
 #sites { display: flex; gap: 8px; margin-left: auto; }
 #sites a {
@@ -73,11 +72,10 @@ main { flex: 1; display: flex; min-height: 0; }
 
 .cam-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 6px 10px;
   font-size: 13px;
 }
-.cam-name { font-weight: 600; letter-spacing: 1px; }
 .cam-status { color: var(--dim); font-size: 12px; }
 .cam-status.online { color: var(--accent); }
 .cam-status.offline { color: var(--alert); }
@@ -90,6 +88,12 @@ main { flex: 1; display: flex; min-height: 0; }
   font-size: 11px;
   color: var(--dim);
   border-top: 1px solid var(--line);
+  line-height: 1.7;
+}
+.cam-hint b {
+  color: var(--accent);
+  font-family: monospace;
+  font-weight: 600;
 }
 
 #sidebar {
@@ -141,8 +145,7 @@ main { flex: 1; display: flex; min-height: 0; }
 }
 #clear-confirm.hidden { display: none; }
 .event img { width: 90px; height: 55px; object-fit: cover; border-radius: 3px; background: #000; }
-.event .ev-meta { font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
-.event .ev-cam { color: var(--accent); font-weight: 600; }
+.event .ev-meta { font-size: 12px; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
 .event .ev-time { color: var(--dim); }
 
 #modal {
@@ -166,29 +169,6 @@ main { flex: 1; display: flex; min-height: 0; }
   position: absolute; top: 6px; right: 10px;
   background: none; border: none; color: var(--text);
   font-size: 22px; cursor: pointer;
-}
-
-#help {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.75);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 60;
-}
-#help.hidden { display: none; }
-#help-body {
-  background: var(--panel);
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 22px 30px;
-  box-shadow: 0 0 30px rgba(53, 224, 161, 0.15);
-}
-#help-body h3 { letter-spacing: 2px; font-size: 14px; color: var(--accent); margin-bottom: 14px; }
-#help-body table { font-size: 13px; border-spacing: 0 7px; }
-#help-body td.key {
-  color: var(--accent);
-  font-family: monospace;
-  padding-right: 22px;
-  white-space: nowrap;
 }
 
 @media (max-width: 900px) {

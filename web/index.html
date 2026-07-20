@@ -3,15 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>All-Seeing Eye</title>
+  <title>MUC.IO ALL SEEING EYE</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header id="topbar">
     <div id="brand">
       <span id="eye">&#128065;</span>
-      <h1>ALL-SEEING EYE</h1>
-      <span id="site-name"></span>
+      <h1>MUC.IO ALL SEEING EYE</h1>
     </div>
     <nav id="sites"></nav>
     <div id="clock"></div>
@@ -28,24 +27,6 @@
     </aside>
   </main>
 
-  <div id="help" class="hidden">
-    <div id="help-body">
-      <h3>KEYBOARD CONTROLS</h3>
-      <table>
-        <tr><td class="key">1–9 &nbsp;or&nbsp; ← →</td><td>switch camera</td></tr>
-        <tr><td class="key">Tab &nbsp;or&nbsp; ↑ ↓</td><td>select next object</td></tr>
-        <tr><td class="key">Enter</td><td>lock / release selected object</td></tr>
-        <tr><td class="key">F</td><td>fullscreen the active camera</td></tr>
-        <tr><td class="key">E</td><td>events list (↑↓ browse, Enter play)</td></tr>
-        <tr><td class="key">X or Del</td><td>delete selected event</td></tr>
-        <tr><td class="key">C</td><td>clear all events (asks to confirm)</td></tr>
-        <tr><td class="key">Space, ← →</td><td>pause / seek in clip playback</td></tr>
-        <tr><td class="key">Esc</td><td>release / back / close</td></tr>
-        <tr><td class="key">H or ?</td><td>show / hide this help</td></tr>
-      </table>
-    </div>
-  </div>
-
   <div id="modal" class="hidden">
     <div id="modal-body">
       <button id="modal-close">&times;</button>
@@ -57,13 +38,17 @@
   <template id="camera-template">
     <div class="camera">
       <div class="cam-header">
-        <span class="cam-name"></span>
         <span class="cam-status"></span>
       </div>
       <div class="cam-view">
         <canvas class="cam-canvas"></canvas>
       </div>
-      <div class="cam-hint">Tab select &middot; Enter lock &middot; F fullscreen &middot; E events &middot; H help</div>
+      <div class="cam-hint">
+        <b>1-9/&larr;&rarr;</b> camera &middot; <b>Tab/&uarr;&darr;</b> select &middot;
+        <b>Enter</b> lock &middot; <b>F</b> fullscreen &middot; <b>E</b> events &middot;
+        <b>X</b> delete &middot; <b>C</b> clear all &middot;
+        <b>Space/&larr;&rarr;</b> pause/seek &middot; <b>Esc</b> back
+      </div>
     </div>
   </template>
 
