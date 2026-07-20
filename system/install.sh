@@ -26,8 +26,11 @@ echo "==> Installing packages"
 apt-get update
 apt-get install -y --no-install-recommends \
     python3 python3-venv python3-opencv python3-numpy \
-    cage chromium-browser curl rsync \
+    cage curl rsync \
     fonts-dejavu-core
+# Browser package name differs across Raspberry Pi OS releases.
+apt-get install -y --no-install-recommends chromium-browser \
+    || apt-get install -y --no-install-recommends chromium
 
 echo "==> Creating service user + directories"
 id -u ase &>/dev/null || useradd --system --create-home --home-dir /home/ase \
@@ -38,6 +41,7 @@ chown -R ase:ase "$DATA_DIR"
 echo "==> Installing application to $APP_DIR"
 rsync -a --delete "$REPO_DIR/allseeingeye" "$REPO_DIR/web" "$APP_DIR/"
 install -m 0755 "$REPO_DIR/system/wait-for-engine.sh" "$APP_DIR/bin/wait-for-engine.sh"
+install -m 0755 "$REPO_DIR/system/kiosk-launch.sh" "$APP_DIR/bin/kiosk-launch.sh"
 
 echo "==> Python environment"
 # --system-site-packages picks up the apt-built OpenCV/NumPy (fast ARM builds
