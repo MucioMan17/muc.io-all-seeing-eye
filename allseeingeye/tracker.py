@@ -46,7 +46,8 @@ class Track:
 
 
 class CentroidTracker:
-    def __init__(self, max_distance: float = 120.0, max_missed: int = 12, min_hits: int = 3):
+    def __init__(self, max_distance: float = 120.0, max_missed: int = 12, min_hits: int = 3,
+                 report_grace: int = 3):
         self._ids = itertools.count(1)
         self.tracks: Dict[int, Track] = {}
         self.max_distance = max_distance
@@ -54,8 +55,34 @@ class CentroidTracker:
         # A track must be seen this many frames before it's reported,
         # which suppresses one-frame noise blobs.
         self.min_hits = min_hits
+        # Classified (non-"motion") tracks stay visible through this many
+        # missed frames, bridging the gap between DNN passes.
+        self.report_grace = report_grace
 
-    def update(self, detections: List[Detection]) -> List[Track]:
+    def _inside_classified(self, det: Detection) -> bool:
+        """Is this detection's center inside a known classified object?
+        Used to stop motion fragments (a waving hand, a turning head) from
+        spawning duplicate tracks on top of a detected person/car."""
+        cx, cy = det.centroid
+        for t in self.tracks.values():
+            if t.label == "motion":
+                continue
+            x, y, w, h = t.box
+            px, py = w * 0.2, h * 0.2
+            if x - px <= cx <= x + w + px and y - py <= cy <= y + h + py:
+                return True
+        return False
+
+    def update(self, detections: List[Detection], authoritative: bool = True) -> List[Track]:
+        """Match detections to tracks.
+
+        authoritative=True (DNN passes, or motion-only mode): detections
+        define box geometry and labels.
+        authoritative=False (motion frames between DNN passes): matches only
+        keep tracks alive — a classified track's box/label/trail are left
+        exactly as the DNN drew them, so partial-motion fragments can't
+        shrink a person box down to a moving hand.
+        """
         unmatched = list(detections)
         # Match existing tracks to the nearest detection, closest pairs first.
         pairs = []
@@ -76,15 +103,17 @@ class CentroidTracker:
             used_dets.add(di)
             det = unmatched[di]
             track = self.tracks[tid]
-            track.box = (det.x, det.y, det.w, det.h)
-            # A classified label (dnn) wins over the generic "motion" label.
-            if det.label != "motion" or track.label == "motion":
-                track.label = det.label
-                track.conf = det.conf
             track.hits += 1
             track.missed = 0
-            cx, cy = track.centroid
-            track.trail.append((int(cx), int(cy)))
+            if authoritative or track.label == "motion":
+                track.box = (det.x, det.y, det.w, det.h)
+                # A classified label (dnn) wins over the generic "motion" label.
+                if det.label != "motion" or track.label == "motion":
+                    track.label = det.label
+                    track.conf = det.conf
+                cx, cy = track.centroid
+                track.trail.append((int(cx), int(cy)))
+            # else: a motion hint on a classified track — geometry untouched.
 
         # Age out pre-existing tracks that missed this frame (before adding
         # new ones, so a track can't be aged in the update that created it).
@@ -96,9 +125,12 @@ class CentroidTracker:
             if track.missed > self.max_missed:
                 del self.tracks[tid]
 
-        # Unmatched detections start new tracks.
+        # Unmatched detections start new tracks — except motion fragments
+        # that are just pieces of an object the DNN already boxed.
         for i, det in enumerate(unmatched):
             if i in used_dets:
+                continue
+            if not authoritative and self._inside_classified(det):
                 continue
             tid = next(self._ids)
             track = Track(id=tid, box=(det.x, det.y, det.w, det.h), label=det.label, conf=det.conf)
@@ -106,4 +138,8 @@ class CentroidTracker:
             track.trail.append((int(cx), int(cy)))
             self.tracks[tid] = track
 
-        return [t for t in self.tracks.values() if t.hits >= self.min_hits and t.missed == 0]
+        return [
+            t for t in self.tracks.values()
+            if t.hits >= self.min_hits
+            and t.missed <= (0 if t.label == "motion" else self.report_grace)
+        ]

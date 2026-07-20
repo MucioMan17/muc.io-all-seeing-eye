@@ -222,12 +222,12 @@ class CameraWorker(threading.Thread):
                     d for d in detections
                     if not in_ignore_zone((d.x + d.w / 2) / fw, (d.y + d.h / 2) / fh, zones)
                 ]
-        elif self.dnn is not None:
-            # Between DNN passes, keep tracks alive with cheap motion boxes.
-            detections = self.detector.detect(frame)
-        else:
-            detections = self.detector.detect(frame)
-        return self.tracker.update(detections)
+            return self.tracker.update(detections, authoritative=True)
+        if self.dnn is not None:
+            # Between DNN passes, motion keeps tracks alive (and catches new
+            # movers) but must not reshape the DNN's boxes.
+            return self.tracker.update(self.detector.detect(frame), authoritative=False)
+        return self.tracker.update(self.detector.detect(frame))
 
     def _publish(self, frame: np.ndarray, ts: float, tracks: List[Track]) -> None:
         ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
