@@ -20,6 +20,15 @@ journalctl -b -u allseeingeye --no-pager 2>&1 | tail -20
 section "kiosk log — last 20 lines this boot"
 journalctl -b -u allseeingeye-kiosk --no-pager 2>&1 | tail -20
 
+section "auto-update"
+systemctl --no-pager status allseeingeye-update.timer 2>&1 | head -5
+journalctl -u allseeingeye-update --no-pager 2>&1 | tail -8
+if [[ -f /etc/allseeingeye/update.conf ]]; then
+    # shellcheck source=/dev/null
+    source /etc/allseeingeye/update.conf
+    echo "repo: $REPO_DIR @ $(git -C "$REPO_DIR" rev-parse --short HEAD 2>&1) (tracking origin/$BRANCH)"
+fi
+
 section "engine answering?"
 if curl -fsS -m 3 http://127.0.0.1:8080/api/health; then
     echo " <- engine OK"

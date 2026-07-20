@@ -1,0 +1,8 @@
+[Unit]
+Description=All-Seeing Eye auto-update (pull + reinstall when the repo has new commits)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/allseeingeye/bin/update.sh

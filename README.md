@@ -59,6 +59,23 @@ The display now boots into the console, and the same UI is at
 **Important — Pi 500 has no camera ribbon connector.** Use USB webcams or
 WiFi/RTSP cameras. Recommendations in [docs/CAMERAS.md](docs/CAMERAS.md).
 
+## Updating
+
+Installs keep themselves current: a systemd timer checks the repo's branch
+every 15 minutes and, when there are new commits, pulls and re-runs the
+installer automatically (config and recordings are never touched; the
+on-screen console restarts only when UI files changed). Useful commands:
+
+```bash
+sudo systemctl start allseeingeye-update       # check right now
+journalctl -u allseeingeye-update -n 20        # see what the updater did
+sudo systemctl disable --now allseeingeye-update.timer   # opt out
+```
+
+Manual `git pull && sudo bash system/install.sh` still works any time.
+Auto-update skips (and says so in the journal) if the repo has local
+uncommitted changes, rather than overwriting them.
+
 ## Try it with zero hardware
 
 ```bash

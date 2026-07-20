@@ -42,6 +42,7 @@ echo "==> Installing application to $APP_DIR"
 rsync -a --delete "$REPO_DIR/allseeingeye" "$REPO_DIR/web" "$APP_DIR/"
 install -m 0755 "$REPO_DIR/system/wait-for-engine.sh" "$APP_DIR/bin/wait-for-engine.sh"
 install -m 0755 "$REPO_DIR/system/kiosk-launch.sh" "$APP_DIR/bin/kiosk-launch.sh"
+install -m 0755 "$REPO_DIR/system/update.sh" "$APP_DIR/bin/update.sh"
 
 echo "==> Python environment"
 # --system-site-packages picks up the apt-built OpenCV/NumPy (fast ARM builds
@@ -63,8 +64,28 @@ fi
 echo "==> systemd services"
 install -m 0644 "$REPO_DIR/system/allseeingeye.service" /etc/systemd/system/
 install -m 0644 "$REPO_DIR/system/allseeingeye-kiosk.service" /etc/systemd/system/
+install -m 0644 "$REPO_DIR/system/allseeingeye-update.service" /etc/systemd/system/
+install -m 0644 "$REPO_DIR/system/allseeingeye-update.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable allseeingeye.service
+
+echo "==> Auto-update"
+BRANCH=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [[ -n "$BRANCH" && "$BRANCH" != "HEAD" ]]; then
+    cat > "$CONF_DIR/update.conf" <<EOF
+REPO_DIR=$REPO_DIR
+BRANCH=$BRANCH
+EOF
+    # The updater runs as root against a repo usually owned by another
+    # user; git requires the path be marked safe in the system config.
+    if ! git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO_DIR"; then
+        git config --system --add safe.directory "$REPO_DIR"
+    fi
+    systemctl enable --now allseeingeye-update.timer
+    echo "    checking origin/$BRANCH every 15 minutes"
+else
+    echo "    not a git checkout — auto-update disabled"
+fi
 
 if [[ -e /dev/tty1 ]]; then
     # The kiosk owns tty1; getty must not fight it for the terminal.
