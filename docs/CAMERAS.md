@@ -32,6 +32,7 @@ account.** Recommended, all verified RTSP-friendly:
 |---|---|
 | **Reolink RLC-410W / W-series** (~$50–80) | Outdoor, night vision, dual-band WiFi, clean RTSP URLs (`.../h264Preview_01_sub`). The workhorse choice. |
 | **Amcrest IP4M / IP5M WiFi** (~$60–90) | Excellent RTSP/ONVIF support, outdoor rated. |
+| **TP-Link Tapo C121** (~$30) | 2K+ indoor/outdoor, IP66, color night vision, RTSP/ONVIF. Wired power + WiFi data. Verified pick — see the RTSP example in the config. |
 | Reolink E1 Pro (~$40) | Cheap indoor pan/tilt with RTSP; good for testing the multi-camera path. |
 | TP-Link Tapo C110/C120 (~$25–40) | Budget indoor; enable the RTSP "camera account" in the Tapo app. |
 | Annke / Hikvision-based (various) | Fine if you prefer PoE — see note below. |

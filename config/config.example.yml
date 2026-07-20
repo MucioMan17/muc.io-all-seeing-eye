@@ -21,13 +21,24 @@ cameras:
       min_area: 600    # raise to ignore small motion (leaves, insects)
 
   # Scale up: WiFi IP cameras via RTSP — just add more entries.
-  # - id: driveway
-  #   name: "Driveway"
-  #   source: "rtsp://user:password@192.168.1.50:554/h264Preview_01_sub"
+  #
+  # TP-Link Tapo (e.g. C121): create a "camera account" in the Tapo app
+  # (Settings -> Advanced Settings -> Camera Account), give the camera a
+  # DHCP reservation, then use those credentials here.
+  # stream2 = efficient sub-stream (best for detection), stream1 = full 2K.
+  # - id: yard
+  #   name: "Yard (Tapo C121)"
+  #   source: "rtsp://camuser:campass@192.168.1.50:554/stream2"
   #   fps: 10
   #   detect:
   #     mode: dnn
   #     classes: [person, car, dog, cat]
+  #
+  # Reolink W-series:
+  # - id: driveway
+  #   name: "Driveway"
+  #   source: "rtsp://user:password@192.168.1.51:554/h264Preview_01_sub"
+  #   fps: 10
 
   # No hardware yet? Synthetic test scene with moving objects:
   # - id: demo
