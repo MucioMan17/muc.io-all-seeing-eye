@@ -47,7 +47,8 @@ cameras:
   #   fps: 10
   #   detect:
   #     mode: dnn
-  #     classes: [person, car, dog, cat]
+  #     # default classes: person, car, bus, bicycle, motorbike,
+  #     # aeroplane, bird, cat, dog — set your own list to override
   #
   # Reolink W-series:
   # - id: driveway

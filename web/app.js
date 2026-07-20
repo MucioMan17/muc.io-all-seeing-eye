@@ -18,9 +18,11 @@ const LABEL_COLORS = {
   car: "#4da3ff",
   bus: "#4da3ff",
   motorbike: "#4da3ff",
+  aeroplane: "#4da3ff",
   bicycle: "#b085ff",
   dog: "#ff8fd8",
   cat: "#ff8fd8",
+  bird: "#ff8fd8",
 };
 const LOCK_COLOR = "#ff5964";
 const LOCK_LOST_MS = 3000; // auto-release a lock if the object vanishes this long
