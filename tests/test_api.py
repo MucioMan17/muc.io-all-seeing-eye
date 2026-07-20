@@ -99,3 +99,10 @@ def test_index_served(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "ALL-SEEING EYE" in r.text
+
+
+def test_ui_files_marked_no_cache(client):
+    assert client.get("/").headers["Cache-Control"] == "no-cache"
+    assert client.get("/static/app.js").headers["Cache-Control"] == "no-cache"
+    # API responses are unaffected by the UI cache rule.
+    assert client.get("/api/state").headers.get("Cache-Control") != "no-cache"

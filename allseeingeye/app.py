@@ -138,4 +138,15 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
         return FileResponse(os.path.join(WEB_DIR, "index.html"))
 
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+
+    @app.middleware("http")
+    async def revalidate_ui(request, call_next):
+        """Make browsers re-check UI files on every load (cheap 304s when
+        unchanged) so an updated install is never masked by a stale cache."""
+        resp = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.startswith("/static"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     return app
