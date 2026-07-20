@@ -81,6 +81,11 @@ class SiteLink:
     url: str
 
 
+# Writable at runtime by the hardened engine service (unlike /opt), so the
+# detection model can auto-download here on first use.
+DEFAULT_MODELS_DIR = "/var/lib/allseeingeye/models"
+
+
 @dataclass
 class AppConfig:
     site_name: str = "All-Seeing Eye"
@@ -88,7 +93,7 @@ class AppConfig:
     cameras: List[CameraConfig] = field(default_factory=list)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     remote_sites: List[SiteLink] = field(default_factory=list)
-    models_dir: str = "/opt/allseeingeye/models"
+    models_dir: str = DEFAULT_MODELS_DIR
 
 
 def _build(cls, data: dict) -> Any:

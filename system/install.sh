@@ -35,7 +35,7 @@ apt-get install -y --no-install-recommends chromium-browser \
 echo "==> Creating service user + directories"
 id -u ase &>/dev/null || useradd --system --create-home --home-dir /home/ase \
     --groups video,render,input --shell /usr/sbin/nologin ase
-mkdir -p "$APP_DIR" "$APP_DIR/bin" "$APP_DIR/models" "$DATA_DIR/recordings" "$CONF_DIR"
+mkdir -p "$APP_DIR" "$APP_DIR/bin" "$DATA_DIR/recordings" "$DATA_DIR/models" "$CONF_DIR"
 chown -R ase:ase "$DATA_DIR"
 
 echo "==> Installing application to $APP_DIR"
@@ -111,6 +111,7 @@ All-Seeing Eye installed.
   Browser:   http://${IP:-<pi-address>}:8080  (any device on your network)
   Config:    $CONF_DIR/config.yml   (then: sudo systemctl restart allseeingeye)
   Logs:      journalctl -u allseeingeye -f
-  Optional:  bash scripts/download-models.sh   # enables 'dnn' object labels
+  AI labels: set 'detect: { mode: dnn }' on a camera and restart — the
+             model (~24 MB) downloads itself on first use
 
 EOF

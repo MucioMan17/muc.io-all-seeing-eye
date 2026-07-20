@@ -17,7 +17,8 @@ cameras:
     height: 720
     fps: 15
     detect:
-      mode: motion     # switch to `dnn` after scripts/download-models.sh
+      mode: motion     # `dnn` = AI object labels (person/car/dog...); the
+                       # model downloads itself on first use
       min_area: 600    # raise to ignore small motion (leaves, insects);
                        # outdoors 1500-3000 is a good starting range
       # Mute regions where motion never counts (trees, street, neighbor's
@@ -75,4 +76,4 @@ remote_sites: []
 #   - name: "Lake House"
 #     url: "http://lakehouse-pi:8080"
 
-models_dir: /opt/allseeingeye/models
+models_dir: /var/lib/allseeingeye/models

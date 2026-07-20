@@ -1,12 +1,12 @@
 #!/bin/bash
 # Fetch the MobileNet-SSD model used for labeled object detection
-# (person / car / dog / ...). Optional — the system runs fine on pure
-# motion detection without it. After downloading, set `detect.mode: dnn`
-# for your cameras and restart the engine.
+# (person / car / dog / ...). NOTE: normally unnecessary — the engine
+# downloads the model itself the first time a camera runs with
+# `detect.mode: dnn`. Kept for offline/pre-provisioning setups.
 
 set -euo pipefail
 
-MODELS_DIR="${1:-/opt/allseeingeye/models}"
+MODELS_DIR="${1:-/var/lib/allseeingeye/models}"
 BASE="https://raw.githubusercontent.com/chuanqi305/MobileNet-SSD/master"
 
 mkdir -p "$MODELS_DIR"

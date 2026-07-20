@@ -69,6 +69,32 @@ def test_in_ignore_zone_point_check():
     assert not in_ignore_zone(0.25, 0.25, [])
 
 
+def test_ensure_models_downloads_missing_files(tmp_path):
+    from allseeingeye.detect import DnnDetector, ensure_models
+
+    def fake_fetch(url, dest):
+        size = 20_000_000 if "caffemodel" in url else 5_000
+        with open(dest, "wb") as f:
+            f.write(b"x" * size)
+
+    assert ensure_models(str(tmp_path), fetch=fake_fetch) is True
+    assert (tmp_path / DnnDetector.PROTOTXT).exists()
+    assert (tmp_path / DnnDetector.WEIGHTS).exists()
+    # Second call is a no-op that still reports success.
+    assert ensure_models(str(tmp_path), fetch=lambda u, d: 1 / 0) is True
+
+
+def test_ensure_models_rejects_truncated_download(tmp_path):
+    from allseeingeye.detect import DnnDetector, ensure_models
+
+    def tiny_fetch(url, dest):
+        with open(dest, "wb") as f:
+            f.write(b"not a model")
+
+    assert ensure_models(str(tmp_path), fetch=tiny_fetch) is False
+    assert not (tmp_path / DnnDetector.WEIGHTS).exists()
+
+
 def test_motion_detector_quiet_on_static_scene():
     md = MotionDetector(min_area=400)
     frame = np.full((480, 640, 3), 60, np.uint8)

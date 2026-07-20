@@ -74,7 +74,8 @@ class CameraView {
       this.statusEl.className = "cam-status";
     } else {
       const n = this.payload.objects.length;
-      this.statusEl.textContent = n ? `● TRACKING ${n}` : "● LIVE";
+      const ai = this.mode === "dnn" ? "AI " : "";
+      this.statusEl.textContent = n ? `● ${ai}TRACKING ${n}` : `● ${ai}LIVE`;
       this.statusEl.className = "cam-status online";
     }
   }
@@ -514,6 +515,7 @@ async function loadState() {
     }
     const view = cameras.get(cam.id);
     view.ignoreZones = cam.ignore || [];
+    view.mode = cam.mode;
     view.setStatus(cam.online);
   }
 }

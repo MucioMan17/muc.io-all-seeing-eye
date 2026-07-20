@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
+import threading
+import urllib.request
 from typing import List, Optional
 
 import cv2
@@ -21,6 +24,9 @@ import numpy as np
 from .tracker import Detection
 
 log = logging.getLogger(__name__)
+
+MODEL_BASE_URL = "https://raw.githubusercontent.com/chuanqi305/MobileNet-SSD/master"
+_download_lock = threading.Lock()
 
 # Pascal VOC classes for the chuanqi305 MobileNet-SSD model.
 VOC_CLASSES = [
@@ -131,6 +137,48 @@ class MotionDetector:
         ]
 
 
+def _fetch_url(url: str, dest: str) -> None:
+    with urllib.request.urlopen(url, timeout=120) as r, open(dest, "wb") as f:
+        shutil.copyfileobj(r, f)
+
+
+def ensure_models(models_dir: str, fetch=_fetch_url) -> bool:
+    """Download the MobileNet-SSD files into models_dir if missing.
+    Returns True when both files are present afterwards. Safe to call from
+    several camera threads at once."""
+    wanted = {
+        DnnDetector.PROTOTXT: (f"{MODEL_BASE_URL}/deploy.prototxt", 1_000),
+        DnnDetector.WEIGHTS: (f"{MODEL_BASE_URL}/mobilenet_iter_73000.caffemodel", 10_000_000),
+    }
+    with _download_lock:
+        try:
+            os.makedirs(models_dir, exist_ok=True)
+        except OSError as e:
+            log.warning("cannot create models dir %s: %s", models_dir, e)
+            return False
+        ok = True
+        for name, (url, min_size) in wanted.items():
+            path = os.path.join(models_dir, name)
+            if os.path.exists(path):
+                continue
+            tmp = path + ".part"
+            try:
+                log.info("downloading %s ...", name)
+                fetch(url, tmp)
+                if os.path.getsize(tmp) < min_size:
+                    raise OSError("truncated download")
+                os.replace(tmp, path)
+                log.info("downloaded %s (%.1f MB)", name, os.path.getsize(path) / 1e6)
+            except Exception as e:
+                log.warning("model download failed (%s): %s", name, e)
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                ok = False
+        return ok
+
+
 class DnnDetector:
     """MobileNet-SSD object detector. Raises FileNotFoundError if the model
     files aren't present so the caller can fall back to motion detection."""
@@ -142,8 +190,13 @@ class DnnDetector:
         proto = os.path.join(models_dir, self.PROTOTXT)
         weights = os.path.join(models_dir, self.WEIGHTS)
         if not (os.path.exists(proto) and os.path.exists(weights)):
-            raise FileNotFoundError(
-                f"DNN model not found in {models_dir} — run scripts/download-models.sh"
+            raise FileNotFoundError(f"DNN model not found in {models_dir}")
+        if not hasattr(cv2.dnn, "readNetFromCaffe"):
+            # OpenCV 5 removed the Caffe importer. Raspberry Pi OS ships
+            # OpenCV 4.x (which has it); this guards dev environments.
+            raise RuntimeError(
+                "this OpenCV build has no Caffe support (OpenCV >= 5?) — "
+                "install opencv 4.x or wait for the ONNX model migration"
             )
         self.net = cv2.dnn.readNetFromCaffe(proto, weights)
         self.confidence = confidence

@@ -25,8 +25,8 @@ from typing import List, Optional
 import cv2
 import numpy as np
 
-from .config import CameraConfig, RecordingConfig
-from .detect import DnnDetector, MotionDetector, in_ignore_zone
+from .config import DEFAULT_MODELS_DIR, CameraConfig, RecordingConfig
+from .detect import DnnDetector, MotionDetector, ensure_models, in_ignore_zone
 from .discover import find_ip_for_mac, substitute_host
 from .recorder import ClipRecorder, EventLog
 from .tracker import CentroidTracker, Detection, Track
@@ -91,11 +91,13 @@ class CameraWorker(threading.Thread):
         self.detector = MotionDetector(min_area=cfg.detect.min_area, ignore=cfg.detect.ignore)
         self.dnn: Optional[DnnDetector] = None
         if cfg.detect.mode == "dnn":
-            try:
-                self.dnn = DnnDetector(models_dir, cfg.detect.confidence, cfg.detect.classes)
-                log.info("camera %s: DNN object detection enabled", cfg.id)
-            except FileNotFoundError as e:
-                log.warning("camera %s: %s — falling back to motion detection", cfg.id, e)
+            # Load (downloading the model first if needed) off-thread so the
+            # video pipeline starts immediately; motion detection covers the
+            # gap and self.dnn is swapped in when ready.
+            threading.Thread(
+                target=self._load_dnn, args=(models_dir,),
+                name=f"dnn-load-{cfg.id}", daemon=True,
+            ).start()
 
         # Published state (guarded by _cond).
         self._cond = threading.Condition()
@@ -104,6 +106,37 @@ class CameraWorker(threading.Thread):
         self._tracks_payload: dict = {"ts": 0, "objects": []}
         self.online = False
         self.last_frame_ts = 0.0
+
+    def _load_dnn(self, models_dir: str) -> None:
+        # Prefer the configured dir; fall back to the writable default
+        # (configs from older installs may point at read-only /opt).
+        candidates = []
+        for d in (models_dir, DEFAULT_MODELS_DIR):
+            if d and d not in candidates:
+                candidates.append(d)
+
+        for d in candidates:  # already-downloaded models first
+            try:
+                self.dnn = DnnDetector(d, self.cfg.detect.confidence, self.cfg.detect.classes)
+                log.info("camera %s: DNN object detection enabled (%s)", self.cfg.id, d)
+                return
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                log.warning("camera %s: model in %s unusable: %s", self.cfg.id, d, e)
+
+        for d in candidates:  # none found — download
+            if not ensure_models(d):
+                continue
+            try:
+                self.dnn = DnnDetector(d, self.cfg.detect.confidence, self.cfg.detect.classes)
+                log.info("camera %s: DNN object detection enabled (%s)", self.cfg.id, d)
+                return
+            except Exception as e:
+                log.warning("camera %s: model in %s unusable: %s", self.cfg.id, d, e)
+
+        log.warning("camera %s: no detection model available — motion detection only",
+                    self.cfg.id)
 
     # ---- capture ----
 

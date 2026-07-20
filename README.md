@@ -112,7 +112,7 @@ and recorded clips stay clean.
 
 ## Roadmap
 
-- [ ] Per-camera detection zones (ignore the street, watch the driveway)
+- [ ] Migrate the DNN to an ONNX model (OpenCV 5 drops the Caffe loader)
 - [ ] Hailo-8L AI HAT+ support for heavier models at full frame rate
 - [ ] Push notifications (ntfy.sh) on person detection
 - [ ] Timeline scrubber over recorded clips
