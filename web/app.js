@@ -351,14 +351,27 @@ class CameraView {
 
 // ---------- app state & keyboard control ----------
 
+// TV-remote navigation: one focus cursor, three zones. WASD (or arrows)
+// move it around; Enter is "OK"; Esc is "back".
+//   topbar : remote-site links + the UPDATE button
+//   grid   : the cameras
+//   events : the recordings sidebar
 const ui = {
   order: [],          // camera ids in display order
   activeIdx: 0,       // which camera keyboard input applies to
   solo: false,        // fullscreen the active camera
-  eventsFocused: false,
+  zone: "grid",       // "grid" | "topbar" | "events"
+  topbarIdx: 0,
   eventsSel: 0,
   eventsCache: [],
   confirmClear: false, // "delete ALL events?" pending confirmation
+  updating: false,
+};
+
+// WASD acts exactly like the arrow pad on a remote.
+const NAV_KEYS = {
+  w: "up", a: "left", s: "down", d: "right",
+  ArrowUp: "up", ArrowLeft: "left", ArrowDown: "down", ArrowRight: "right",
 };
 
 async function deleteEvent(ev) {
@@ -393,12 +406,83 @@ function toggleSolo() {
   document.getElementById("grid").classList.toggle("solo", ui.solo);
 }
 
-function setEventsFocus(on) {
-  ui.eventsFocused = on;
-  if (!on) setConfirmClear(false);
-  document.getElementById("sidebar").classList.toggle("focused", on);
+function topbarFocusables() {
+  return [...document.querySelectorAll("#sites a"), document.getElementById("update-btn")];
+}
+
+function setTopbarFocus(i) {
+  const els = topbarFocusables();
+  ui.topbarIdx = Math.max(0, Math.min(els.length - 1, i));
+  els.forEach((el, idx) => el.classList.toggle("focused", idx === ui.topbarIdx));
+}
+
+function setZone(zone) {
+  ui.zone = zone;
+  if (zone !== "events") setConfirmClear(false);
+  document.getElementById("sidebar").classList.toggle("focused", zone === "events");
+  if (zone === "topbar") {
+    setTopbarFocus(topbarFocusables().length - 1); // land on UPDATE
+  } else {
+    topbarFocusables().forEach((el) => el.classList.remove("focused"));
+  }
   renderEvents();
 }
+
+// ---------- one-click update ----------
+
+async function readUpdateStatus() {
+  try {
+    return await (await fetch("/api/update/status")).json();
+  } catch {
+    return null; // engine restarting mid-update — keep polling
+  }
+}
+
+async function startUpdate() {
+  if (ui.updating) return;
+  ui.updating = true;
+  const btn = document.getElementById("update-btn");
+  btn.classList.add("updating");
+  btn.textContent = "UPDATING…";
+
+  const finish = (text) => {
+    ui.updating = false;
+    btn.classList.remove("updating");
+    btn.textContent = text;
+    setTimeout(() => { btn.textContent = "UPDATE"; }, 5000);
+  };
+
+  const before = await readUpdateStatus();
+  const beforeTs = before ? before.ts : 0;
+  try {
+    await fetch("/api/update", { method: "POST" });
+  } catch {
+    finish("UPDATE FAILED");
+    return;
+  }
+
+  const t0 = Date.now();
+  const poll = setInterval(async () => {
+    if (Date.now() - t0 > 5 * 60 * 1000) {
+      clearInterval(poll);
+      finish("UPDATE FAILED");
+      return;
+    }
+    const st = await readUpdateStatus();
+    if (!st || st.state === "none" || st.ts === beforeTs) return; // not done yet
+    clearInterval(poll);
+    if (st.state === "updated") {
+      btn.textContent = "RESTARTING…";
+      location.reload();
+    } else if (st.state === "current") {
+      finish("UP TO DATE");
+    } else {
+      finish("BLOCKED — SEE LOGS");
+    }
+  }, 3000);
+}
+
+document.getElementById("update-btn").addEventListener("click", startUpdate);
 
 function moveEventSel(d) {
   if (!ui.eventsCache.length) return;
@@ -452,10 +536,11 @@ function renderEvents() {
     list.appendChild(empty);
     return;
   }
+  const focused = ui.zone === "events";
   ui.eventsCache.forEach((ev, idx) => {
     const el = document.createElement("div");
     el.className = "event";
-    if (ui.eventsFocused && idx === ui.eventsSel) el.classList.add("selected");
+    if (focused && idx === ui.eventsSel) el.classList.add("selected");
     const when = new Date(ev.start * 1000);
     el.innerHTML = `
       <img loading="lazy" src="/api/media/${ev.snapshot}" alt="">
@@ -471,7 +556,7 @@ function renderEvents() {
       deleteEvent(ev);
     });
     list.appendChild(el);
-    if (ui.eventsFocused && idx === ui.eventsSel) el.scrollIntoView({ block: "nearest" });
+    if (focused && idx === ui.eventsSel) el.scrollIntoView({ block: "nearest" });
   });
 }
 
@@ -497,12 +582,20 @@ document.getElementById("modal").addEventListener("click", (e) => {
 });
 
 // ---------- the keymap ----------
-// Modes, checked in order: video player -> events list -> grid.
+// Remote model: WASD/arrows move the focus, Enter = OK, Esc = back.
+// Zones checked in order: video player -> events -> topbar -> grid.
 // All bindings are listed in the hint bar under each camera feed.
+
+function gridColumns() {
+  const cols = getComputedStyle(document.getElementById("grid"))
+    .gridTemplateColumns.split(" ").length;
+  return Math.max(1, cols);
+}
 
 document.addEventListener("keydown", (e) => {
   const key = e.key;
   const low = key.toLowerCase();
+  const nav = NAV_KEYS[key] || NAV_KEYS[low];
 
   const modalOpen = !document.getElementById("modal").classList.contains("hidden");
   if (modalOpen) {
@@ -511,12 +604,13 @@ document.addEventListener("keydown", (e) => {
     else if (key === " ") {
       video.paused ? video.play() : video.pause();
       e.preventDefault();
-    } else if (key === "ArrowRight") video.currentTime += 5;
-    else if (key === "ArrowLeft") video.currentTime -= 5;
+    } else if (nav === "right") video.currentTime += 5;
+    else if (nav === "left") video.currentTime -= 5;
+    if (nav) e.preventDefault();
     return;
   }
 
-  if (ui.eventsFocused) {
+  if (ui.zone === "events") {
     if (ui.confirmClear) {
       if (key === "Enter") {
         setConfirmClear(false);
@@ -527,11 +621,14 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       return;
     }
-    if (key === "ArrowDown" || key === "Tab") {
-      moveEventSel(e.shiftKey ? -1 : 1);
+    if (nav === "down" || key === "Tab") {
+      moveEventSel(key === "Tab" && e.shiftKey ? -1 : 1);
       e.preventDefault();
-    } else if (key === "ArrowUp") {
+    } else if (nav === "up") {
       moveEventSel(-1);
+      e.preventDefault();
+    } else if (nav === "left") {
+      setZone("grid"); // back out of the sidebar toward the cameras
       e.preventDefault();
     } else if (key === "Enter") {
       const ev = ui.eventsCache[ui.eventsSel];
@@ -543,31 +640,55 @@ document.addEventListener("keydown", (e) => {
     } else if (low === "c") {
       if (ui.eventsCache.length) setConfirmClear(true);
     } else if (key === "Escape" || low === "e") {
-      setEventsFocus(false);
+      setZone("grid");
     }
     return;
   }
 
-  // Grid mode.
+  if (ui.zone === "topbar") {
+    if (nav === "left") setTopbarFocus(ui.topbarIdx - 1);
+    else if (nav === "right") setTopbarFocus(ui.topbarIdx + 1);
+    else if (nav === "down" || key === "Escape") setZone("grid");
+    else if (key === "Enter") {
+      const el = topbarFocusables()[ui.topbarIdx];
+      if (el?.id === "update-btn") startUpdate();
+      else el?.click();
+    }
+    if (nav) e.preventDefault();
+    return;
+  }
+
+  // Grid zone.
   const cam = activeCam();
+  const cols = gridColumns();
+  const count = ui.order.length;
   if (key >= "1" && key <= "9") {
     setActiveCamera(+key - 1);
-  } else if (key === "ArrowRight") {
-    setActiveCamera(ui.activeIdx + 1);
-  } else if (key === "ArrowLeft") {
-    setActiveCamera(ui.activeIdx - 1);
-  } else if (key === "Tab" || key === "ArrowDown") {
-    cam?.cycleSelect(key === "Tab" && e.shiftKey ? -1 : 1);
+  } else if (nav === "right") {
+    if (ui.activeIdx >= count - 1) setZone("events"); // off the right edge -> sidebar
+    else setActiveCamera(ui.activeIdx + 1);
     e.preventDefault();
-  } else if (key === "ArrowUp") {
-    cam?.cycleSelect(-1);
+  } else if (nav === "left") {
+    if (ui.activeIdx > 0) setActiveCamera(ui.activeIdx - 1);
+    e.preventDefault();
+  } else if (nav === "up") {
+    if (ui.activeIdx < cols) setZone("topbar"); // off the top row -> UPDATE button
+    else setActiveCamera(ui.activeIdx - cols);
+    e.preventDefault();
+  } else if (nav === "down") {
+    if (ui.activeIdx + cols < count) setActiveCamera(ui.activeIdx + cols);
+    e.preventDefault();
+  } else if (key === "Tab") {
+    cam?.cycleSelect(e.shiftKey ? -1 : 1);
     e.preventDefault();
   } else if (key === "Enter") {
     cam?.toggleLockSelected();
   } else if (low === "f") {
     toggleSolo();
   } else if (low === "e") {
-    setEventsFocus(true);
+    setZone("events");
+  } else if (low === "u") {
+    setZone("topbar"); // lands on UPDATE; Enter confirms
   } else if (key === "Escape") {
     for (const c of cameras.values()) c.releaseLock();
     if (ui.solo) toggleSolo();

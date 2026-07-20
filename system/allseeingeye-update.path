@@ -1,0 +1,8 @@
+[Unit]
+Description=Watch for update requests from the All-Seeing Eye UI
+
+[Path]
+PathExists=/var/lib/allseeingeye/update.request
+
+[Install]
+WantedBy=multi-user.target

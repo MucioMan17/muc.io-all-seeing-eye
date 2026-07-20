@@ -20,8 +20,9 @@ journalctl -b -u allseeingeye --no-pager 2>&1 | tail -20
 section "kiosk log — last 20 lines this boot"
 journalctl -b -u allseeingeye-kiosk --no-pager 2>&1 | tail -20
 
-section "auto-update"
-systemctl --no-pager status allseeingeye-update.timer 2>&1 | head -5
+section "on-demand update"
+systemctl --no-pager status allseeingeye-update.path 2>&1 | head -5
+cat /var/lib/allseeingeye/update.status 2>/dev/null || echo "no update.status yet"
 journalctl -u allseeingeye-update --no-pager 2>&1 | tail -8
 if [[ -f /etc/allseeingeye/update.conf ]]; then
     # shellcheck source=/dev/null

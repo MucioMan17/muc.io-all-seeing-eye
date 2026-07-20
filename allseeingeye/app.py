@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -31,6 +32,17 @@ log = logging.getLogger(__name__)
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
 MJPEG_BOUNDARY = "aseframe"
 
+# Written by install.sh with the installed commit; absent in dev checkouts.
+BUILD_FILE = os.path.join(os.path.dirname(WEB_DIR), "BUILD")
+
+
+def build_stamp() -> str:
+    try:
+        with open(BUILD_FILE) as f:
+            return f.read().strip() or "dev"
+    except OSError:
+        return "dev"
+
 
 def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLog) -> FastAPI:
     app = FastAPI(title="All-Seeing Eye", version=__version__)
@@ -45,11 +57,38 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
     def health():
         return {"ok": True, "version": __version__, "site": cfg.site_name}
 
+    # The engine can't (and shouldn't) run the root updater itself. The UI's
+    # update button drops a request flag here; the allseeingeye-update.path
+    # systemd unit watches for it and runs the updater with the right
+    # privileges, then reports back through update.status.
+    state_dir = os.path.dirname(os.path.abspath(cfg.recording.dir))
+
+    @app.post("/api/update")
+    def request_update():
+        os.makedirs(state_dir, exist_ok=True)
+        with open(os.path.join(state_dir, "update.request"), "w") as f:
+            f.write(str(time.time()))
+        return {"requested": True, "build": build_stamp()}
+
+    @app.get("/api/update/status")
+    def update_status():
+        try:
+            with open(os.path.join(state_dir, "update.status")) as f:
+                parts = f.read().split()
+            return {
+                "state": parts[0],
+                "commit": parts[1] if len(parts) > 1 else "-",
+                "ts": float(parts[2]) if len(parts) > 2 else 0,
+            }
+        except (OSError, ValueError, IndexError):
+            return {"state": "none", "commit": "-", "ts": 0}
+
     @app.get("/api/state")
     def state():
         return {
             "site": cfg.site_name,
             "version": __version__,
+            "build": build_stamp(),
             "cameras": [
                 {
                     "id": c.id,

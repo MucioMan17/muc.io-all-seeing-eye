@@ -91,6 +91,36 @@ def test_clear_all_events(client, tmp_path):
     assert not (tmp_path / "demo" / "ev3.mp4").exists()
 
 
+def test_update_request_creates_flag_and_status_roundtrip(client, tmp_path):
+    import os
+    state_dir = os.path.dirname(str(tmp_path))
+    flag = os.path.join(state_dir, "update.request")
+    status = os.path.join(state_dir, "update.status")
+    try:
+        r = client.post("/api/update")
+        assert r.json()["requested"] is True
+        assert os.path.exists(flag)
+
+        # No updater has run yet.
+        assert client.get("/api/update/status").json()["state"] == "none"
+
+        # Simulate the updater reporting back.
+        with open(status, "w") as f:
+            f.write("updated abc1234 1784560000")
+        st = client.get("/api/update/status").json()
+        assert st["state"] == "updated"
+        assert st["commit"] == "abc1234"
+        assert st["ts"] == 1784560000.0
+    finally:
+        for p in (flag, status):
+            if os.path.exists(p):
+                os.remove(p)
+
+
+def test_state_includes_build(client):
+    assert client.get("/api/state").json()["build"] == "dev"
+
+
 def test_media_path_confined(client):
     assert client.get("/api/media/../../etc/passwd").status_code == 404
 

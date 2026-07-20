@@ -47,6 +47,28 @@ body {
 
 #clock { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
 
+#update-btn {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+#update-btn:hover, #update-btn.focused, #sites a.focused {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+#update-btn.updating {
+  color: var(--accent);
+  border-color: var(--accent);
+  animation: ase-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ase-pulse { 50% { opacity: 0.35; } }
+
 main { flex: 1; display: flex; min-height: 0; }
 
 #grid {

@@ -62,20 +62,12 @@ WiFi/RTSP cameras. Recommendations in [docs/CAMERAS.md](docs/CAMERAS.md).
 
 ## Updating
 
-Installs keep themselves current: a systemd timer checks the repo's branch
-every 15 minutes and, when there are new commits, pulls and re-runs the
-installer automatically (config and recordings are never touched; the
-on-screen console restarts only when UI files changed). Useful commands:
-
-```bash
-sudo systemctl start allseeingeye-update       # check right now
-journalctl -u allseeingeye-update -n 20        # see what the updater did
-sudo systemctl disable --now allseeingeye-update.timer   # opt out
-```
-
+One click: the **UPDATE** button in the top bar (keyboard: `U`, then
+`Enter`) pulls the latest code, reinstalls, and restarts what changed —
+config and recordings are never touched, and the page reloads itself when
+done. "UP TO DATE" means there was nothing new; "BLOCKED" means the repo
+on the Pi has local edits (see `journalctl -u allseeingeye-update`).
 Manual `git pull && sudo bash system/install.sh` still works any time.
-Auto-update skips (and says so in the journal) if the repo has local
-uncommitted changes, rather than overwriting them.
 
 ## Try it with zero hardware
 

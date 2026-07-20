@@ -65,11 +65,14 @@ echo "==> systemd services"
 install -m 0644 "$REPO_DIR/system/allseeingeye.service" /etc/systemd/system/
 install -m 0644 "$REPO_DIR/system/allseeingeye-kiosk.service" /etc/systemd/system/
 install -m 0644 "$REPO_DIR/system/allseeingeye-update.service" /etc/systemd/system/
-install -m 0644 "$REPO_DIR/system/allseeingeye-update.timer" /etc/systemd/system/
+install -m 0644 "$REPO_DIR/system/allseeingeye-update.path" /etc/systemd/system/
+# Retire the old periodic auto-update timer in favor of on-demand updates.
+systemctl disable --now allseeingeye-update.timer 2>/dev/null || true
+rm -f /etc/systemd/system/allseeingeye-update.timer
 systemctl daemon-reload
 systemctl enable allseeingeye.service
 
-echo "==> Auto-update"
+echo "==> On-demand updates (UPDATE button / U key in the UI)"
 BRANCH=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 if [[ -n "$BRANCH" && "$BRANCH" != "HEAD" ]]; then
     cat > "$CONF_DIR/update.conf" <<EOF
@@ -81,10 +84,11 @@ EOF
     if ! git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO_DIR"; then
         git config --system --add safe.directory "$REPO_DIR"
     fi
-    systemctl enable --now allseeingeye-update.timer
-    echo "    checking origin/$BRANCH every 15 minutes"
+    git -C "$REPO_DIR" rev-parse --short HEAD > "$APP_DIR/BUILD" 2>/dev/null || echo unknown > "$APP_DIR/BUILD"
+    systemctl enable --now allseeingeye-update.path
+    echo "    tracking origin/$BRANCH, updates run when requested from the UI"
 else
-    echo "    not a git checkout — auto-update disabled"
+    echo "    not a git checkout — UI updates disabled"
 fi
 
 if [[ -e /dev/tty1 ]]; then
