@@ -25,6 +25,22 @@
     </aside>
   </main>
 
+  <div id="help" class="hidden">
+    <div id="help-body">
+      <h3>KEYBOARD CONTROLS</h3>
+      <table>
+        <tr><td class="key">1–9 &nbsp;or&nbsp; ← →</td><td>switch camera</td></tr>
+        <tr><td class="key">Tab &nbsp;or&nbsp; ↑ ↓</td><td>select next object</td></tr>
+        <tr><td class="key">Enter</td><td>lock / release selected object</td></tr>
+        <tr><td class="key">F</td><td>fullscreen the active camera</td></tr>
+        <tr><td class="key">E</td><td>events list (↑↓ browse, Enter play)</td></tr>
+        <tr><td class="key">Space, ← →</td><td>pause / seek in clip playback</td></tr>
+        <tr><td class="key">Esc</td><td>release / back / close</td></tr>
+        <tr><td class="key">H or ?</td><td>show / hide this help</td></tr>
+      </table>
+    </div>
+  </div>
+
   <div id="modal" class="hidden">
     <div id="modal-body">
       <button id="modal-close">&times;</button>
@@ -42,7 +58,7 @@
       <div class="cam-view">
         <canvas class="cam-canvas"></canvas>
       </div>
-      <div class="cam-hint">click an object to lock &middot; Esc to release</div>
+      <div class="cam-hint">Tab select &middot; Enter lock &middot; F fullscreen &middot; E events &middot; H help</div>
     </div>
   </template>
 

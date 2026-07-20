@@ -37,6 +37,7 @@ class CameraView {
     this.lockId = null;
     this.lockLastSeen = 0;
     this.ignoreZones = info.ignore || [];
+    this.selectedId = null; // keyboard-highlighted object (Tab/arrows)
 
     const tpl = document.getElementById("camera-template");
     this.root = tpl.content.firstElementChild.cloneNode(true);
@@ -116,6 +117,35 @@ class CameraView {
     this.lockId = null;
   }
 
+  sortedObjects() {
+    return [...(this.payload.objects || [])].sort((a, b) => a.id - b.id);
+  }
+
+  // Keyboard: move the selection highlight to the next/previous object.
+  cycleSelect(dir) {
+    const objs = this.sortedObjects();
+    if (!objs.length) {
+      this.selectedId = null;
+      return;
+    }
+    const i = objs.findIndex((o) => o.id === this.selectedId);
+    const ni = i === -1 ? (dir > 0 ? 0 : objs.length - 1) : (i + dir + objs.length) % objs.length;
+    this.selectedId = objs[ni].id;
+  }
+
+  // Keyboard: lock the selected object (or the biggest one if none selected).
+  toggleLockSelected() {
+    const objs = this.sortedObjects();
+    if (!objs.length) {
+      this.lockId = null;
+      return;
+    }
+    let target = objs.find((o) => o.id === this.selectedId);
+    if (!target) target = objs.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a));
+    this.lockId = this.lockId === target.id ? null : target.id;
+    this.lockLastSeen = performance.now();
+  }
+
   // Zoom source rectangle for an object: its box padded out, clamped to frame.
   zoomRect(o, padFactor) {
     const [fw, fh] = this.frameSize();
@@ -191,6 +221,17 @@ class CameraView {
       ctx.lineWidth = o.id === this.lockId ? px * 2 : px;
       ctx.strokeStyle = color;
       ctx.strokeRect(o.x, o.y, o.w, o.h);
+
+      // Keyboard selection highlight: white dashed halo around the box.
+      if (o.id === this.selectedId && o.id !== this.lockId) {
+        ctx.save();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = px;
+        ctx.setLineDash([5 * px, 3 * px]);
+        ctx.strokeRect(o.x - 5 * px, o.y - 5 * px, o.w + 10 * px, o.h + 10 * px);
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
 
       // Corner ticks give it that surveillance-HUD look.
       const t = Math.min(14 * px / 2, o.w / 3);
@@ -309,7 +350,53 @@ class CameraView {
   }
 }
 
-// ---------- app bootstrap ----------
+// ---------- app state & keyboard control ----------
+
+const ui = {
+  order: [],          // camera ids in display order
+  activeIdx: 0,       // which camera keyboard input applies to
+  solo: false,        // fullscreen the active camera
+  eventsFocused: false,
+  eventsSel: 0,
+  eventsCache: [],
+  helpOpen: false,
+};
+
+function activeCam() {
+  return cameras.get(ui.order[ui.activeIdx]);
+}
+
+function setActiveCamera(i) {
+  if (!ui.order.length) return;
+  ui.activeIdx = ((i % ui.order.length) + ui.order.length) % ui.order.length;
+  ui.order.forEach((id, idx) => {
+    cameras.get(id).root.classList.toggle("active", idx === ui.activeIdx);
+  });
+}
+
+function toggleSolo() {
+  ui.solo = !ui.solo;
+  document.getElementById("grid").classList.toggle("solo", ui.solo);
+}
+
+function toggleHelp() {
+  ui.helpOpen = !ui.helpOpen;
+  document.getElementById("help").classList.toggle("hidden", !ui.helpOpen);
+}
+
+function setEventsFocus(on) {
+  ui.eventsFocused = on;
+  document.getElementById("sidebar").classList.toggle("focused", on);
+  renderEvents();
+}
+
+function moveEventSel(d) {
+  if (!ui.eventsCache.length) return;
+  ui.eventsSel = Math.max(0, Math.min(ui.eventsCache.length - 1, ui.eventsSel + d));
+  renderEvents();
+}
+
+// ---------- bootstrap ----------
 
 async function loadState() {
   const res = await fetch("/api/state");
@@ -328,7 +415,11 @@ async function loadState() {
   }
 
   for (const cam of state.cameras) {
-    if (!cameras.has(cam.id)) cameras.set(cam.id, new CameraView(cam));
+    if (!cameras.has(cam.id)) {
+      cameras.set(cam.id, new CameraView(cam));
+      ui.order.push(cam.id);
+      setActiveCamera(ui.activeIdx); // keep the active highlight applied
+    }
     const view = cameras.get(cam.id);
     view.ignoreZones = cam.ignore || [];
     view.setStatus(cam.online);
@@ -338,11 +429,18 @@ async function loadState() {
 async function loadEvents() {
   const res = await fetch("/api/events?limit=30");
   const { events } = await res.json();
+  ui.eventsCache = events;
+  ui.eventsSel = Math.min(ui.eventsSel, Math.max(0, events.length - 1));
+  renderEvents();
+}
+
+function renderEvents() {
   const list = document.getElementById("events");
   list.innerHTML = "";
-  for (const ev of events) {
+  ui.eventsCache.forEach((ev, idx) => {
     const el = document.createElement("div");
     el.className = "event";
+    if (ui.eventsFocused && idx === ui.eventsSel) el.classList.add("selected");
     const when = new Date(ev.start * 1000);
     el.innerHTML = `
       <img loading="lazy" src="/api/media/${ev.snapshot}" alt="">
@@ -355,7 +453,8 @@ async function loadEvents() {
       when.toLocaleDateString() + " " + when.toLocaleTimeString();
     el.addEventListener("click", () => openModal(ev));
     list.appendChild(el);
-  }
+    if (ui.eventsFocused && idx === ui.eventsSel) el.scrollIntoView({ block: "nearest" });
+  });
 }
 
 function openModal(ev) {
@@ -367,20 +466,86 @@ function openModal(ev) {
   modal.classList.remove("hidden");
 }
 
-document.getElementById("modal-close").addEventListener("click", () => {
+function closeModal() {
   const video = document.getElementById("modal-video");
   video.pause();
   video.src = "";
   document.getElementById("modal").classList.add("hidden");
-});
+}
+
+document.getElementById("modal-close").addEventListener("click", closeModal);
 document.getElementById("modal").addEventListener("click", (e) => {
-  if (e.target.id === "modal") document.getElementById("modal-close").click();
+  if (e.target.id === "modal") closeModal();
 });
 
+// ---------- the keymap ----------
+// Modes, checked in order: help overlay -> video player -> events list -> grid.
+
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    for (const cam of cameras.values()) cam.releaseLock();
-    document.getElementById("modal-close").click();
+  const key = e.key;
+  const low = key.toLowerCase();
+
+  if (key === "?" || low === "h") {
+    toggleHelp();
+    e.preventDefault();
+    return;
+  }
+  if (ui.helpOpen) {
+    if (key === "Escape" || key === "Enter") toggleHelp();
+    return;
+  }
+
+  const modalOpen = !document.getElementById("modal").classList.contains("hidden");
+  if (modalOpen) {
+    const video = document.getElementById("modal-video");
+    if (key === "Escape" || key === "Backspace") closeModal();
+    else if (key === " ") {
+      video.paused ? video.play() : video.pause();
+      e.preventDefault();
+    } else if (key === "ArrowRight") video.currentTime += 5;
+    else if (key === "ArrowLeft") video.currentTime -= 5;
+    return;
+  }
+
+  if (ui.eventsFocused) {
+    if (key === "ArrowDown" || key === "Tab") {
+      moveEventSel(e.shiftKey ? -1 : 1);
+      e.preventDefault();
+    } else if (key === "ArrowUp") {
+      moveEventSel(-1);
+      e.preventDefault();
+    } else if (key === "Enter") {
+      const ev = ui.eventsCache[ui.eventsSel];
+      if (ev) openModal(ev);
+    } else if (key === "Escape" || low === "e") {
+      setEventsFocus(false);
+    }
+    return;
+  }
+
+  // Grid mode.
+  const cam = activeCam();
+  if (key >= "1" && key <= "9") {
+    setActiveCamera(+key - 1);
+  } else if (key === "ArrowRight") {
+    setActiveCamera(ui.activeIdx + 1);
+  } else if (key === "ArrowLeft") {
+    setActiveCamera(ui.activeIdx - 1);
+  } else if (key === "Tab" || key === "ArrowDown") {
+    cam?.cycleSelect(key === "Tab" && e.shiftKey ? -1 : 1);
+    e.preventDefault();
+  } else if (key === "ArrowUp") {
+    cam?.cycleSelect(-1);
+    e.preventDefault();
+  } else if (key === "Enter") {
+    cam?.toggleLockSelected();
+  } else if (low === "f") {
+    toggleSolo();
+  } else if (low === "e") {
+    setEventsFocus(true);
+  } else if (key === "Escape") {
+    for (const c of cameras.values()) c.releaseLock();
+    if (ui.solo) toggleSolo();
   }
 });
 

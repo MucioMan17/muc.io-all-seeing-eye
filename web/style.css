@@ -68,6 +68,8 @@ main { flex: 1; display: flex; min-height: 0; }
   display: flex;
   flex-direction: column;
 }
+.camera.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#grid.solo .camera:not(.active) { display: none; }
 
 .cam-header {
   display: flex;
@@ -114,6 +116,8 @@ main { flex: 1; display: flex; min-height: 0; }
   cursor: pointer;
 }
 .event:hover { background: var(--panel2); }
+.event.selected { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
+#sidebar.focused h2 { color: var(--accent); border-bottom-color: var(--accent); }
 .event img { width: 90px; height: 55px; object-fit: cover; border-radius: 3px; background: #000; }
 .event .ev-meta { font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
 .event .ev-cam { color: var(--accent); font-weight: 600; }
@@ -140,6 +144,29 @@ main { flex: 1; display: flex; min-height: 0; }
   position: absolute; top: 6px; right: 10px;
   background: none; border: none; color: var(--text);
   font-size: 22px; cursor: pointer;
+}
+
+#help {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 60;
+}
+#help.hidden { display: none; }
+#help-body {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 22px 30px;
+  box-shadow: 0 0 30px rgba(53, 224, 161, 0.15);
+}
+#help-body h3 { letter-spacing: 2px; font-size: 14px; color: var(--accent); margin-bottom: 14px; }
+#help-body table { font-size: 13px; border-spacing: 0 7px; }
+#help-body td.key {
+  color: var(--accent);
+  font-family: monospace;
+  padding-right: 22px;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {

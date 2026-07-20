@@ -24,6 +24,9 @@ the Pi. No cloud, no accounts, no footage leaving your network.
   showing a virtually zoomed live crop. Click an object to **lock**: one big
   zoom panel follows it (click again / Esc to release, auto-releases if the
   object leaves).
+- **100% keyboard-drivable** — built for the Pi 500's built-in keyboard, no
+  mouse needed: `1–9`/arrows switch cameras, `Tab` cycles objects, `Enter`
+  locks, `F` fullscreens, `E` browses events, `H` shows all keys.
 - **Records evidence.** Motion-triggered MP4 clips with seconds of pre-roll,
   JPEG snapshot thumbnails, an event timeline in the sidebar, retention +
   disk-ceiling cleanup.
