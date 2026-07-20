@@ -1,0 +1,5 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pyyaml>=6.0
+# OpenCV + NumPy come from apt (python3-opencv) on the Pi via the system
+# site-packages; for dev machines install requirements-dev.txt too.

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>All-Seeing Eye</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div id="brand">
+      <span id="eye">&#128065;</span>
+      <h1>ALL-SEEING EYE</h1>
+      <span id="site-name"></span>
+    </div>
+    <nav id="sites"></nav>
+    <div id="clock"></div>
+  </header>
+
+  <main>
+    <section id="grid"></section>
+    <aside id="sidebar">
+      <h2>Events</h2>
+      <div id="events"></div>
+    </aside>
+  </main>
+
+  <div id="modal" class="hidden">
+    <div id="modal-body">
+      <button id="modal-close">&times;</button>
+      <video id="modal-video" controls autoplay></video>
+      <div id="modal-caption"></div>
+    </div>
+  </div>
+
+  <template id="camera-template">
+    <div class="camera">
+      <div class="cam-header">
+        <span class="cam-name"></span>
+        <span class="cam-status"></span>
+      </div>
+      <div class="cam-view">
+        <canvas class="cam-canvas"></canvas>
+      </div>
+      <div class="cam-hint">click an object to lock &middot; Esc to release</div>
+    </div>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

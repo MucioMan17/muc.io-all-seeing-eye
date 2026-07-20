@@ -1,0 +1,30 @@
+[Unit]
+Description=All-Seeing Eye kiosk console (fullscreen UI on the attached display)
+After=allseeingeye.service systemd-user-sessions.service
+Wants=allseeingeye.service
+
+[Service]
+User=ase
+# cage = minimal Wayland compositor that runs exactly one fullscreen app.
+# The Pi boots straight into the camera console — no desktop, no login screen.
+ExecStartPre=/opt/allseeingeye/bin/wait-for-engine.sh
+ExecStart=/usr/bin/cage -d -s -- /usr/bin/chromium-browser \
+    --kiosk http://127.0.0.1:8080 \
+    --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
+    --autoplay-policy=no-user-gesture-required \
+    --check-for-update-interval=31536000
+Restart=always
+RestartSec=3
+# Give the kiosk the first virtual terminal (replaces getty on tty1).
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+PAMName=login
+UtmpIdentifier=tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=graphical.target

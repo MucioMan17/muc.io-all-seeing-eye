@@ -1,0 +1,53 @@
+# All-Seeing Eye configuration.
+# Installed to /etc/allseeingeye/config.yml — edit there, then:
+#   sudo systemctl restart allseeingeye
+
+site_name: "Main House"
+
+server:
+  host: 0.0.0.0        # listen on all interfaces (LAN + VPN)
+  port: 8080
+
+cameras:
+  # Start: one USB webcam plugged into the Pi 500.
+  - id: front
+    name: "Front Yard"
+    source: 0          # /dev/video0
+    width: 1280
+    height: 720
+    fps: 15
+    detect:
+      mode: motion     # switch to `dnn` after scripts/download-models.sh
+      min_area: 600    # raise to ignore small motion (leaves, insects)
+
+  # Scale up: WiFi IP cameras via RTSP — just add more entries.
+  # - id: driveway
+  #   name: "Driveway"
+  #   source: "rtsp://user:password@192.168.1.50:554/h264Preview_01_sub"
+  #   fps: 10
+  #   detect:
+  #     mode: dnn
+  #     classes: [person, car, dog, cat]
+
+  # No hardware yet? Synthetic test scene with moving objects:
+  # - id: demo
+  #   name: "Demo (synthetic)"
+  #   source: synthetic
+
+recording:
+  enabled: true
+  dir: /var/lib/allseeingeye/recordings
+  pre_seconds: 3       # seconds of video kept from *before* motion started
+  post_seconds: 6      # keep rolling this long after motion stops
+  max_seconds: 120     # split clips longer than this even if motion continues
+  retention_days: 14
+  max_disk_percent: 90 # stop starting new clips when the disk is this full
+
+# The other house: link its All-Seeing Eye node in this UI's header.
+# Reach it over Tailscale/WireGuard — see docs/MULTISITE.md.
+remote_sites: []
+# remote_sites:
+#   - name: "Lake House"
+#     url: "http://lakehouse-pi:8080"
+
+models_dir: /opt/allseeingeye/models

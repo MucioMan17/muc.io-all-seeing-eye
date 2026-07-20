@@ -1,0 +1,20 @@
+# Development config — synthetic camera, recordings in ./run/.
+site_name: "Dev"
+
+server:
+  host: 127.0.0.1
+  port: 8080
+
+cameras:
+  - id: demo
+    name: "Demo (synthetic)"
+    source: synthetic
+    fps: 15
+
+recording:
+  enabled: true
+  dir: ./run/recordings
+  max_seconds: 15   # short splits so demo events appear quickly
+  retention_days: 1
+
+models_dir: ./models

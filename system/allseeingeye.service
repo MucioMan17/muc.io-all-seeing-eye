@@ -1,0 +1,22 @@
+[Unit]
+Description=All-Seeing Eye camera engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ase
+Group=video
+ExecStart=/opt/allseeingeye/venv/bin/python -m allseeingeye --config /etc/allseeingeye/config.yml
+WorkingDirectory=/opt/allseeingeye
+Restart=always
+RestartSec=3
+# Hardening — the engine only needs its state dir, config, and the cameras.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/allseeingeye
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

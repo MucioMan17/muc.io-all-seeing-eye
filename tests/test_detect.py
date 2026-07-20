@@ -1,0 +1,44 @@
+import numpy as np
+import pytest
+
+cv2 = pytest.importorskip("cv2")
+
+from allseeingeye.detect import MotionDetector, _merge_boxes
+
+
+def test_merge_overlapping_boxes():
+    merged = _merge_boxes([[0, 0, 50, 50], [40, 40, 50, 50], [300, 300, 20, 20]])
+    assert len(merged) == 2
+
+
+def test_merge_keeps_separate_boxes():
+    merged = _merge_boxes([[0, 0, 30, 30], [200, 200, 30, 30]])
+    assert len(merged) == 2
+
+
+def test_motion_detector_finds_moving_object():
+    md = MotionDetector(min_area=400)
+    rng = np.random.default_rng(42)
+    base = rng.integers(0, 40, (480, 640, 3), dtype=np.uint8)
+
+    # Warm up the background model on a static scene.
+    for _ in range(40):
+        md.detect(base.copy())
+
+    # Drop in a bright moving block.
+    frame = base.copy()
+    frame[200:280, 300:380] = 255
+    dets = md.detect(frame)
+    assert len(dets) >= 1
+    d = max(dets, key=lambda d: d.w * d.h)
+    # Box should be around the block (coords are back in full-frame space).
+    assert 250 <= d.x <= 350
+    assert 150 <= d.y <= 250
+
+
+def test_motion_detector_quiet_on_static_scene():
+    md = MotionDetector(min_area=400)
+    frame = np.full((480, 640, 3), 60, np.uint8)
+    for _ in range(40):
+        md.detect(frame.copy())
+    assert md.detect(frame.copy()) == []
