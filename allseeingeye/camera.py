@@ -26,7 +26,7 @@ import cv2
 import numpy as np
 
 from .config import CameraConfig, RecordingConfig
-from .detect import DnnDetector, MotionDetector
+from .detect import DnnDetector, MotionDetector, in_ignore_zone
 from .discover import find_ip_for_mac, substitute_host
 from .recorder import ClipRecorder, EventLog
 from .tracker import CentroidTracker, Detection, Track
@@ -88,7 +88,7 @@ class CameraWorker(threading.Thread):
         self._stop = threading.Event()
         self._known_ip: Optional[str] = None
 
-        self.detector = MotionDetector(min_area=cfg.detect.min_area)
+        self.detector = MotionDetector(min_area=cfg.detect.min_area, ignore=cfg.detect.ignore)
         self.dnn: Optional[DnnDetector] = None
         if cfg.detect.mode == "dnn":
             try:
@@ -180,6 +180,15 @@ class CameraWorker(threading.Thread):
         detections: List[Detection]
         if self.dnn is not None and frame_i % max(1, self.cfg.detect.dnn_interval) == 0:
             detections = self.dnn.detect(frame)
+            # Motion mode masks zones at the pixel level; for DNN boxes,
+            # drop any detection centered inside an ignore zone.
+            zones = self.cfg.detect.ignore
+            if zones:
+                fh, fw = frame.shape[:2]
+                detections = [
+                    d for d in detections
+                    if not in_ignore_zone((d.x + d.w / 2) / fw, (d.y + d.h / 2) / fh, zones)
+                ]
         elif self.dnn is not None:
             # Between DNN passes, keep tracks alive with cheap motion boxes.
             detections = self.detector.detect(frame)

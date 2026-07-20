@@ -27,6 +27,10 @@ class DetectConfig:
     confidence: float = 0.5
     # Only report these classes in dnn mode (empty = all COCO/VOC classes).
     classes: List[str] = field(default_factory=lambda: ["person", "car", "dog", "cat", "bicycle", "motorbike", "bus"])
+    # Dead zones where detections are discarded (trees, street, neighbor's
+    # yard). Rectangles in normalized 0..1 coordinates of the frame:
+    #   ignore: [{x: 0.0, y: 0.0, w: 1.0, h: 0.35}]  # mute the top 35%
+    ignore: List[dict] = field(default_factory=list)
 
 
 @dataclass

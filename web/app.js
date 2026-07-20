@@ -36,6 +36,7 @@ class CameraView {
     this.payloadAt = 0;
     this.lockId = null;
     this.lockLastSeen = 0;
+    this.ignoreZones = info.ignore || [];
 
     const tpl = document.getElementById("camera-template");
     this.root = tpl.content.firstElementChild.cloneNode(true);
@@ -141,6 +142,23 @@ class CameraView {
     } else {
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, fw, fh);
+    }
+
+    // Muted zones: faint hatch so you can see what the detector ignores.
+    for (const z of this.ignoreZones) {
+      const zx = z.x * fw, zy = z.y * fh, zw = z.w * fw, zh = z.h * fh;
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 89, 100, 0.07)";
+      ctx.fillRect(zx, zy, zw, zh);
+      ctx.strokeStyle = "rgba(255, 89, 100, 0.35)";
+      ctx.setLineDash([8, 6]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(zx, zy, zw, zh);
+      ctx.setLineDash([]);
+      ctx.font = `${Math.max(10, fw / 90)}px monospace`;
+      ctx.fillStyle = "rgba(255, 89, 100, 0.5)";
+      ctx.fillText("MUTED", zx + 6, zy + Math.max(14, fw / 75));
+      ctx.restore();
     }
 
     const objects = this.payload.objects || [];
@@ -311,7 +329,9 @@ async function loadState() {
 
   for (const cam of state.cameras) {
     if (!cameras.has(cam.id)) cameras.set(cam.id, new CameraView(cam));
-    cameras.get(cam.id).setStatus(cam.online);
+    const view = cameras.get(cam.id);
+    view.ignoreZones = cam.ignore || [];
+    view.setStatus(cam.online);
   }
 }
 

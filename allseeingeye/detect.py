@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -61,13 +61,38 @@ def _merge_boxes(boxes: List[List[int]], pad: int = 10) -> List[List[int]]:
     return boxes
 
 
+def in_ignore_zone(cx_norm: float, cy_norm: float, zones: List[dict]) -> bool:
+    """True if a normalized (0..1) point falls inside any ignore rectangle."""
+    return any(
+        z["x"] <= cx_norm <= z["x"] + z["w"] and z["y"] <= cy_norm <= z["y"] + z["h"]
+        for z in zones
+    )
+
+
 class MotionDetector:
-    def __init__(self, min_area: int = 600):
+    def __init__(self, min_area: int = 600, ignore: List[dict] | None = None):
         self.min_area = min_area
+        self.ignore = ignore or []
         self.bg = cv2.createBackgroundSubtractorMOG2(
             history=300, varThreshold=32, detectShadows=True
         )
         self._frames_seen = 0
+        self._zone_mask: Optional[np.ndarray] = None
+
+    def _mask_for(self, w: int, h: int) -> Optional[np.ndarray]:
+        """Binary mask (255 = watched, 0 = muted) at processing resolution."""
+        if not self.ignore:
+            return None
+        if self._zone_mask is None or self._zone_mask.shape != (h, w):
+            m = np.full((h, w), 255, np.uint8)
+            for z in self.ignore:
+                x0 = max(0, int(z["x"] * w))
+                y0 = max(0, int(z["y"] * h))
+                x1 = min(w, int((z["x"] + z["w"]) * w))
+                y1 = min(h, int((z["y"] + z["h"]) * h))
+                m[y0:y1, x0:x1] = 0
+            self._zone_mask = m
+        return self._zone_mask
 
     def detect(self, frame: np.ndarray) -> List[Detection]:
         h, w = frame.shape[:2]
@@ -82,6 +107,9 @@ class MotionDetector:
 
         # 127 = shadow pixels in MOG2; keep only confident foreground (255).
         _, mask = cv2.threshold(mask, 200, 255, cv2.THRESH_BINARY)
+        zone_mask = self._mask_for(small.shape[1], small.shape[0])
+        if zone_mask is not None:
+            mask = cv2.bitwise_and(mask, zone_mask)
         mask = cv2.dilate(mask, None, iterations=2)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 

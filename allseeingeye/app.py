@@ -56,6 +56,7 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
                     "name": c.name,
                     "online": workers[c.id].online,
                     "mode": "dnn" if workers[c.id].dnn else "motion",
+                    "ignore": c.detect.ignore,
                 }
                 for c in cfg.cameras
             ],

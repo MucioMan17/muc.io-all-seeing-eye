@@ -18,7 +18,14 @@ cameras:
     fps: 15
     detect:
       mode: motion     # switch to `dnn` after scripts/download-models.sh
-      min_area: 600    # raise to ignore small motion (leaves, insects)
+      min_area: 600    # raise to ignore small motion (leaves, insects);
+                       # outdoors 1500-3000 is a good starting range
+      # Mute regions where motion never counts (trees, street, neighbor's
+      # yard). Rectangles as fractions of the frame: x/y = top-left corner,
+      # w/h = size, all 0.0-1.0. Muted zones show as hatched areas in the UI.
+      # ignore:
+      #   - {x: 0.0, y: 0.0, w: 1.0, h: 0.30}   # top 30% (tree line / sky)
+      #   - {x: 0.75, y: 0.3, w: 0.25, h: 0.4}  # bush on the right edge
 
   # Scale up: WiFi IP cameras via RTSP — just add more entries.
   #

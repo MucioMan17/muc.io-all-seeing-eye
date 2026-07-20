@@ -36,6 +36,39 @@ def test_motion_detector_finds_moving_object():
     assert 150 <= d.y <= 250
 
 
+def test_ignore_zone_mutes_motion():
+    # Same moving block as above, but the zone covers it -> no detections.
+    zone = [{"x": 0.3, "y": 0.3, "w": 0.4, "h": 0.4}]
+    md = MotionDetector(min_area=400, ignore=zone)
+    rng = np.random.default_rng(42)
+    base = rng.integers(0, 40, (480, 640, 3), dtype=np.uint8)
+    for _ in range(40):
+        md.detect(base.copy())
+    frame = base.copy()
+    frame[200:280, 300:380] = 255
+    assert md.detect(frame) == []
+
+
+def test_ignore_zone_elsewhere_keeps_detection():
+    zone = [{"x": 0.0, "y": 0.0, "w": 0.2, "h": 0.2}]
+    md = MotionDetector(min_area=400, ignore=zone)
+    rng = np.random.default_rng(42)
+    base = rng.integers(0, 40, (480, 640, 3), dtype=np.uint8)
+    for _ in range(40):
+        md.detect(base.copy())
+    frame = base.copy()
+    frame[200:280, 300:380] = 255
+    assert len(md.detect(frame)) >= 1
+
+
+def test_in_ignore_zone_point_check():
+    from allseeingeye.detect import in_ignore_zone
+    zones = [{"x": 0.0, "y": 0.0, "w": 0.5, "h": 0.5}]
+    assert in_ignore_zone(0.25, 0.25, zones)
+    assert not in_ignore_zone(0.75, 0.75, zones)
+    assert not in_ignore_zone(0.25, 0.25, [])
+
+
 def test_motion_detector_quiet_on_static_scene():
     md = MotionDetector(min_area=400)
     frame = np.full((480, 640, 3), 60, np.uint8)
