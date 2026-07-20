@@ -35,6 +35,10 @@ class CameraConfig:
     name: str = ""
     # int = USB/V4L2 device index, "rtsp://..." = IP camera, "synthetic" = test pattern.
     source: Union[int, str] = 0
+    # Optional hardware MAC of an IP camera (e.g. "AA:BB:CC:DD:EE:FF").
+    # When set, the current IP is discovered on the LAN and substituted into
+    # the source URL — no DHCP reservation / static IP needed.
+    mac: Optional[str] = None
     width: int = 1280
     height: int = 720
     fps: int = 15

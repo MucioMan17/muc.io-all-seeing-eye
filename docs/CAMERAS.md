@@ -49,7 +49,11 @@ they can't feed your own AI.
 - **WiFi cameras still need a power wire.** "Wireless" means wireless *data*.
   If you're running power anyway, consider PoE cameras + a $30 PoE switch —
   vastly more reliable outdoors, and the Pi 500's gigabit port is right there.
-- Give cameras static IPs (DHCP reservations) so `rtsp://` URLs never break.
+- Keep `rtsp://` URLs from breaking when the router shuffles addresses:
+  either give cameras DHCP reservations in your router, **or** — if you
+  can't access router settings — set the camera's `mac:` in the config and
+  the Pi will discover its current IP automatically (and re-discover it on
+  every reconnect).
 - Put cameras on your network but **block their internet access** in your
   router if you want true local-only operation — the Pi talks to them over
   the LAN regardless.

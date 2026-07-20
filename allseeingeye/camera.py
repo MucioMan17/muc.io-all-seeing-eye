@@ -27,6 +27,7 @@ import numpy as np
 
 from .config import CameraConfig, RecordingConfig
 from .detect import DnnDetector, MotionDetector
+from .discover import find_ip_for_mac, substitute_host
 from .recorder import ClipRecorder, EventLog
 from .tracker import CentroidTracker, Detection, Track
 
@@ -85,6 +86,7 @@ class CameraWorker(threading.Thread):
         self.tracker = CentroidTracker()
         self.recorder = ClipRecorder(cfg.id, rec_cfg, cfg.fps, event_log)
         self._stop = threading.Event()
+        self._known_ip: Optional[str] = None
 
         self.detector = MotionDetector(min_area=cfg.detect.min_area)
         self.dnn: Optional[DnnDetector] = None
@@ -109,6 +111,18 @@ class CameraWorker(threading.Thread):
         src = self.cfg.source
         if src == "synthetic":
             return SyntheticSource(self.cfg.width, self.cfg.height, self.cfg.fps)
+        if self.cfg.mac and isinstance(src, str) and "://" in src:
+            # Camera pinned by MAC: find whatever IP it has right now.
+            ip = find_ip_for_mac(self.cfg.mac)
+            if ip:
+                if ip != self._known_ip:
+                    log.info("camera %s: MAC %s is at %s", self.cfg.id, self.cfg.mac, ip)
+                self._known_ip = ip
+            elif self._known_ip:
+                log.warning("camera %s: MAC %s not found, trying last IP %s",
+                            self.cfg.id, self.cfg.mac, self._known_ip)
+            if self._known_ip:
+                src = substitute_host(src, self._known_ip)
         cap = cv2.VideoCapture(src)
         if isinstance(src, int):
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)

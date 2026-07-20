@@ -26,9 +26,16 @@ cameras:
   # (Settings -> Advanced Settings -> Camera Account), give the camera a
   # DHCP reservation, then use those credentials here.
   # stream2 = efficient sub-stream (best for detection), stream1 = full 2K.
+  #
+  # `mac` (optional): the camera's hardware MAC address, from the Tapo app's
+  # Device Info page or the label on the camera. With it set, the Pi finds
+  # the camera's current IP automatically and follows it if it changes —
+  # no DHCP reservation or router access needed. The IP in `source` is then
+  # just a placeholder.
   # - id: yard
   #   name: "Yard (Tapo C121)"
   #   source: "rtsp://camuser:campass@192.168.1.50:554/stream2"
+  #   mac: "AA:BB:CC:DD:EE:FF"
   #   fps: 10
   #   detect:
   #     mode: dnn
