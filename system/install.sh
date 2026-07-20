@@ -26,7 +26,7 @@ echo "==> Installing packages"
 apt-get update
 apt-get install -y --no-install-recommends \
     python3 python3-venv python3-opencv python3-numpy \
-    cage curl rsync \
+    ffmpeg cage curl rsync \
     fonts-dejavu-core
 # Browser package name differs across Raspberry Pi OS releases.
 apt-get install -y --no-install-recommends chromium-browser \

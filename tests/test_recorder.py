@@ -1,4 +1,6 @@
 import json
+import shutil
+import subprocess
 import time
 
 import numpy as np
@@ -38,6 +40,23 @@ def test_motion_event_produces_clip_snapshot_and_index(tmp_path):
     assert (tmp_path / ev["video"]).exists()
     assert (tmp_path / ev["snapshot"]).exists()
     assert ev["end"] > ev["start"]
+
+
+@pytest.mark.skipif(not shutil.which("ffprobe"), reason="ffprobe not installed")
+def test_clips_are_h264_for_browser_playback(tmp_path):
+    rec, log = make(tmp_path)
+    t = time.time()
+    for i in range(10):
+        rec.feed(frame(), t + i * 0.1, active=True)
+    rec.feed(frame(), t + 3.0, active=False)
+    ev = log.list()[0]
+    codec = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v",
+         "-show_entries", "stream=codec_name", "-of", "csv=p=0",
+         str(tmp_path / ev["video"])],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    assert codec == "h264"
 
 
 def test_no_event_without_motion(tmp_path):

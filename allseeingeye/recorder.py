@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -27,6 +28,59 @@ import numpy as np
 from .config import RecordingConfig
 
 log = logging.getLogger(__name__)
+
+HAS_FFMPEG = shutil.which("ffmpeg") is not None
+
+
+class FfmpegClipWriter:
+    """H.264 clip writer: pipes raw BGR frames into ffmpeg/libx264.
+
+    Browsers can't decode the MPEG-4 Part 2 video OpenCV's VideoWriter
+    produces, so clips must be H.264 to play in the console UI.
+    +faststart moves the index to the front of the file so playback can
+    begin before the whole clip has downloaded.
+    """
+
+    def __init__(self, path: str, fps: int, width: int, height: int):
+        self.proc = subprocess.Popen(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "rawvideo", "-pix_fmt", "bgr24",
+                "-s", f"{width}x{height}", "-r", str(fps), "-i", "-",
+                "-c:v", "libx264", "-preset", "superfast", "-crf", "23",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                path,
+            ],
+            stdin=subprocess.PIPE,
+        )
+
+    def isOpened(self) -> bool:
+        return self.proc.poll() is None
+
+    def write(self, frame: np.ndarray) -> None:
+        try:
+            self.proc.stdin.write(frame.tobytes())
+        except (BrokenPipeError, ValueError, OSError):
+            pass  # ffmpeg died; release() will log via returncode
+
+    def release(self) -> None:
+        try:
+            self.proc.stdin.close()
+            self.proc.wait(timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            self.proc.kill()
+        if self.proc.returncode not in (0, None):
+            log.error("ffmpeg clip writer exited with code %s", self.proc.returncode)
+
+
+def open_clip_writer(path: str, fps: int, width: int, height: int):
+    if HAS_FFMPEG:
+        return FfmpegClipWriter(path, fps, width, height)
+    log.warning(
+        "ffmpeg not found — falling back to OpenCV mp4v clips, which "
+        "browsers cannot play. Install ffmpeg for in-UI playback."
+    )
+    return cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
 
 
 class EventLog:
@@ -146,10 +200,7 @@ class ClipRecorder:
         video_rel = os.path.join(self.camera_id, eid + ".mp4")
         snap_rel = os.path.join(self.camera_id, eid + ".jpg")
         h, w = frame.shape[:2]
-        writer = cv2.VideoWriter(
-            os.path.join(self.cfg.dir, video_rel),
-            cv2.VideoWriter_fourcc(*"mp4v"), self.fps, (w, h),
-        )
+        writer = open_clip_writer(os.path.join(self.cfg.dir, video_rel), self.fps, w, h)
         if not writer.isOpened():
             log.error("camera %s: failed to open clip writer", self.camera_id)
             return
