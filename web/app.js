@@ -360,7 +360,23 @@ const ui = {
   eventsSel: 0,
   eventsCache: [],
   helpOpen: false,
+  confirmClear: false, // "delete ALL events?" pending confirmation
 };
+
+async function deleteEvent(ev) {
+  await fetch(`/api/events/${encodeURIComponent(ev.id)}`, { method: "DELETE" });
+  await loadEvents();
+}
+
+async function clearAllEvents() {
+  await fetch("/api/events", { method: "DELETE" });
+  await loadEvents();
+}
+
+function setConfirmClear(on) {
+  ui.confirmClear = on;
+  document.getElementById("clear-confirm").classList.toggle("hidden", !on);
+}
 
 function activeCam() {
   return cameras.get(ui.order[ui.activeIdx]);
@@ -386,6 +402,7 @@ function toggleHelp() {
 
 function setEventsFocus(on) {
   ui.eventsFocused = on;
+  if (!on) setConfirmClear(false);
   document.getElementById("sidebar").classList.toggle("focused", on);
   renderEvents();
 }
@@ -437,6 +454,13 @@ async function loadEvents() {
 function renderEvents() {
   const list = document.getElementById("events");
   list.innerHTML = "";
+  if (!ui.eventsCache.length) {
+    const empty = document.createElement("div");
+    empty.className = "events-empty";
+    empty.textContent = "no events";
+    list.appendChild(empty);
+    return;
+  }
   ui.eventsCache.forEach((ev, idx) => {
     const el = document.createElement("div");
     el.className = "event";
@@ -447,11 +471,16 @@ function renderEvents() {
       <div class="ev-meta">
         <span class="ev-cam"></span>
         <span class="ev-time"></span>
-      </div>`;
+      </div>
+      <button class="ev-del" title="delete this event">&times;</button>`;
     el.querySelector(".ev-cam").textContent = ev.camera;
     el.querySelector(".ev-time").textContent =
       when.toLocaleDateString() + " " + when.toLocaleTimeString();
     el.addEventListener("click", () => openModal(ev));
+    el.querySelector(".ev-del").addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteEvent(ev);
+    });
     list.appendChild(el);
     if (ui.eventsFocused && idx === ui.eventsSel) el.scrollIntoView({ block: "nearest" });
   });
@@ -508,6 +537,16 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (ui.eventsFocused) {
+    if (ui.confirmClear) {
+      if (key === "Enter") {
+        setConfirmClear(false);
+        clearAllEvents();
+      } else {
+        setConfirmClear(false); // any other key cancels
+      }
+      e.preventDefault();
+      return;
+    }
     if (key === "ArrowDown" || key === "Tab") {
       moveEventSel(e.shiftKey ? -1 : 1);
       e.preventDefault();
@@ -517,6 +556,12 @@ document.addEventListener("keydown", (e) => {
     } else if (key === "Enter") {
       const ev = ui.eventsCache[ui.eventsSel];
       if (ev) openModal(ev);
+    } else if (key === "Delete" || key === "Backspace" || low === "x") {
+      const ev = ui.eventsCache[ui.eventsSel];
+      if (ev) deleteEvent(ev);
+      e.preventDefault();
+    } else if (low === "c") {
+      if (ui.eventsCache.length) setConfirmClear(true);
     } else if (key === "Escape" || low === "e") {
       setEventsFocus(false);
     }

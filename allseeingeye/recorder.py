@@ -119,6 +119,64 @@ class EventLog:
                 break
         return events
 
+    def _delete_files(self, ev: dict) -> None:
+        for key in ("video", "snapshot"):
+            rel = ev.get(key)
+            if rel:
+                try:
+                    os.remove(os.path.join(self.root, rel))
+                except OSError:
+                    pass
+
+    def _rewrite(self, lines: List[str]) -> None:
+        tmp = self.path + ".tmp"
+        with open(tmp, "w") as f:
+            f.writelines(lines)
+        os.replace(tmp, self.path)
+
+    def remove(self, event_id: str) -> bool:
+        """Delete one event: its index entry, clip, and snapshot."""
+        with self._lock:
+            try:
+                with open(self.path) as f:
+                    lines = f.readlines()
+            except FileNotFoundError:
+                return False
+            keep, removed = [], None
+            for line in lines:
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if ev.get("id") == event_id:
+                    removed = ev
+                else:
+                    keep.append(line)
+            if removed is None:
+                return False
+            self._delete_files(removed)
+            self._rewrite(keep)
+            return True
+
+    def clear(self) -> int:
+        """Delete every indexed event and its files; returns the count."""
+        with self._lock:
+            try:
+                with open(self.path) as f:
+                    lines = f.readlines()
+            except FileNotFoundError:
+                return 0
+            n = 0
+            for line in lines:
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                self._delete_files(ev)
+                n += 1
+            self._rewrite([])
+            return n
+
     def prune(self, retention_days: int) -> None:
         """Drop index entries (and their files) older than the window."""
         cutoff = time.time() - retention_days * 86400
@@ -137,18 +195,9 @@ class EventLog:
                 if ev.get("start", 0) >= cutoff:
                     keep.append(line)
                 else:
-                    for key in ("video", "snapshot"):
-                        rel = ev.get(key)
-                        if rel:
-                            try:
-                                os.remove(os.path.join(self.root, rel))
-                            except OSError:
-                                pass
+                    self._delete_files(ev)
             if len(keep) != len(lines):
-                tmp = self.path + ".tmp"
-                with open(tmp, "w") as f:
-                    f.writelines(keep)
-                os.replace(tmp, self.path)
+                self._rewrite(keep)
 
 
 class ClipRecorder:

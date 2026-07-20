@@ -114,6 +114,16 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
     def list_events(limit: int = 50, camera: str | None = None):
         return {"events": events.list(limit=min(limit, 500), camera=camera)}
 
+    @app.delete("/api/events/{event_id}")
+    def delete_event(event_id: str):
+        if not events.remove(event_id):
+            raise HTTPException(404, f"unknown event {event_id!r}")
+        return {"deleted": True}
+
+    @app.delete("/api/events")
+    def clear_events():
+        return {"deleted": events.clear()}
+
     @app.get("/api/media/{path:path}")
     def media(path: str):
         root = os.path.realpath(cfg.recording.dir)
