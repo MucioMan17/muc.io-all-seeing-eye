@@ -102,6 +102,40 @@ def test_from_request_consumes_file_and_reports(tmp_path, monkeypatch):
     assert status.read_text().startswith("added cam2 ")
 
 
+def _run_request(tmp_path, monkeypatch, cfg_text, req_obj):
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(cfg_text)
+    status = tmp_path / "status"
+    monkeypatch.setattr(ac, "STATUS_FILE", str(status))
+    monkeypatch.setattr(ac.subprocess, "run", lambda *a, **k: None)
+    req = tmp_path / "addcamera.request"
+    req.write_text(json.dumps(req_obj))
+    rc = ac._from_request(str(req), str(cfg))
+    return rc, cfg, status
+
+
+def test_from_request_delete(tmp_path, monkeypatch):
+    rc, cfg, status = _run_request(tmp_path, monkeypatch, BASE, {"action": "delete", "id": "front"})
+    assert rc == 0
+    assert status.read_text().startswith("deleted front ")
+    assert "id: front" not in cfg.read_text()
+
+
+def test_from_request_update_password(tmp_path, monkeypatch):
+    base = (
+        "site_name: X\n"
+        "cameras:\n"
+        "  - id: cam2\n"
+        '    source: "rtsp://u:old@192.168.1.5:554/stream2"\n'
+        "    fps: 10\n    detect:\n      mode: dnn\n"
+    )
+    rc, cfg, status = _run_request(
+        tmp_path, monkeypatch, base, {"action": "update", "id": "cam2", "password": "brandnew"})
+    assert rc == 0
+    assert status.read_text().startswith("updated cam2 ")
+    assert "brandnew" in cfg.read_text()
+
+
 def test_from_request_bad_json_reports_error(tmp_path, monkeypatch):
     status = tmp_path / "status"
     monkeypatch.setattr(ac, "STATUS_FILE", str(status))

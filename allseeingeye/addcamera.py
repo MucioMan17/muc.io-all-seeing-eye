@@ -99,8 +99,18 @@ def apply(config: str, cam_id: str, rtsp: str, mac, fps: int, mode: str,
     return 0
 
 
+def _restart() -> None:
+    try:
+        subprocess.run(["systemctl", "restart", "allseeingeye"], check=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"could not restart automatically ({e})", file=sys.stderr)
+
+
 def _from_request(path: str, config: str) -> int:
-    """Add a camera described by a JSON request file dropped by the UI."""
+    """Apply a camera add/delete/update described by a JSON request file
+    dropped by the UI. Reports the outcome via the status file."""
+    from . import configedit
+
     try:
         with open(path) as f:
             req = json.load(f)
@@ -113,14 +123,51 @@ def _from_request(path: str, config: str) -> int:
             os.remove(path)  # consume the request either way
         except OSError:
             pass
-    if not req.get("id") or not req.get("rtsp"):
-        write_status("error", req.get("id", "-"))
+
+    cam_id = req.get("id")
+    action = req.get("action", "add")
+    if not cam_id:
+        write_status("error", "-")
         return 1
-    return apply(
-        config, req["id"], req["rtsp"], req.get("mac") or None,
-        int(req.get("fps") or 10), req.get("mode") or "dnn",
-        req.get("name") or None, restart=True, status=True,
-    )
+
+    try:
+        data = configedit.load(config)
+        if action == "add":
+            if not req.get("rtsp") and req.get("source") is None:
+                write_status("error", cam_id)
+                return 1
+            if configedit.find(data, cam_id):
+                write_status("exists", cam_id)
+                return 0
+            cam = configedit.build_camera({
+                "id": cam_id, "name": req.get("name"),
+                "source": req.get("rtsp") if req.get("rtsp") else req.get("source"),
+                "mac": req.get("mac"), "fps": req.get("fps"), "mode": req.get("mode"),
+            })
+            configedit.add(data, cam)
+            outcome = "added"
+        elif action == "delete":
+            if not configedit.remove(data, cam_id):
+                write_status("error", cam_id)
+                return 1
+            outcome = "deleted"
+        elif action == "update":
+            if not configedit.update(data, cam_id, req):
+                write_status("error", cam_id)
+                return 1
+            outcome = "updated"
+        else:
+            write_status("error", cam_id)
+            return 1
+        configedit.save(config, data)
+    except Exception as e:  # never leave a half-written config unreported
+        print(f"config edit failed: {e}", file=sys.stderr)
+        write_status("error", cam_id)
+        return 1
+
+    write_status(outcome, cam_id)
+    _restart()
+    return 0
 
 
 def main(argv=None) -> int:

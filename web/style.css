@@ -99,11 +99,25 @@ main { flex: 1; display: flex; min-height: 0; }
 
 .cam-header {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   padding: 6px 10px;
   font-size: 13px;
 }
-.cam-status { color: var(--dim); font-size: 12px; }
+.cam-status { color: var(--dim); font-size: 12px; margin-left: auto; }
+.cam-edit, .cam-del {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.cam-edit:hover, .cam-edit:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+.cam-del:hover, .cam-del:focus { color: var(--alert); border-color: var(--alert); outline: none; }
+.cam-del.armed { color: #fff; background: var(--alert); border-color: var(--alert); }
 .cam-status.online { color: var(--accent); }
 .cam-status.offline { color: var(--alert); }
 
@@ -288,7 +302,10 @@ main { flex: 1; display: flex; min-height: 0; }
   padding: 8px 16px; cursor: pointer;
 }
 .ac-actions .primary { border-color: var(--accent); color: var(--accent); }
+.ac-actions .danger { border-color: var(--alert); color: var(--alert); margin-right: auto; }
+.ac-actions .danger.armed { background: var(--alert); color: #fff; }
 .ac-actions button:disabled { opacity: 0.4; cursor: default; }
+#addcam-body .ac-rtsp.hidden { display: none; }
 #addcam-body button:focus, #ac-scan:focus {
   outline: none; border-color: var(--accent); color: var(--accent);
 }

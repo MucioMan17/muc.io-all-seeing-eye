@@ -150,6 +150,52 @@ def test_add_camera_requires_ip_or_rtsp(client):
     assert client.post("/api/cameras", json={"username": "x"}).status_code == 400
 
 
+def test_get_camera_fields(client):
+    r = client.get("/api/cameras/demo")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == "demo"
+    assert "password" not in body  # never exposed
+    assert client.get("/api/cameras/nope").status_code == 404
+
+
+def test_delete_camera_writes_request(client, tmp_path):
+    import os
+    req_path = os.path.join(os.path.dirname(str(tmp_path)), "addcamera.request")
+    try:
+        assert client.delete("/api/cameras/demo").json()["requested"] is True
+        with open(req_path) as f:
+            req = json.load(f)
+        assert req == {"action": "delete", "id": "demo"}
+        assert client.delete("/api/cameras/nope").status_code == 404
+    finally:
+        if os.path.exists(req_path):
+            os.remove(req_path)
+
+
+def test_patch_camera_writes_update_request(client, tmp_path):
+    import os
+    req_path = os.path.join(os.path.dirname(str(tmp_path)), "addcamera.request")
+    try:
+        r = client.patch("/api/cameras/demo", json={"name": "Backyard", "password": "new"})
+        assert r.json()["requested"] is True
+        with open(req_path) as f:
+            req = json.load(f)
+        assert req["action"] == "update"
+        assert req["id"] == "demo"
+        assert req["name"] == "Backyard"
+        assert req["password"] == "new"
+        assert client.patch("/api/cameras/nope", json={}).status_code == 404
+    finally:
+        if os.path.exists(req_path):
+            os.remove(req_path)
+
+
+def test_add_camera_status_route_not_shadowed(client):
+    # /api/cameras/add-status must not be captured by /api/cameras/{cam_id}
+    assert client.get("/api/cameras/add-status").json()["state"] == "none"
+
+
 def test_add_camera_status_default(client):
     assert client.get("/api/cameras/add-status").json()["state"] == "none"
 

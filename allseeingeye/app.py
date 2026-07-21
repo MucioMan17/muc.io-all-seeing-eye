@@ -17,7 +17,7 @@ import json
 import logging
 import os
 import time
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 from typing import Dict
 
 from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -108,11 +108,21 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
         hosts = await asyncio.to_thread(scan_rtsp_hosts)
         return {"cameras": hosts}
 
+    def queue_camera_request(req: dict) -> None:
+        """Drop a camera add/delete/update request for the privileged helper,
+        clearing any stale status first so the UI polls the fresh outcome."""
+        os.makedirs(state_dir, exist_ok=True)
+        try:
+            os.remove(os.path.join(state_dir, "addcamera.status"))
+        except OSError:
+            pass
+        with open(os.path.join(state_dir, "addcamera.request"), "w") as f:
+            json.dump(req, f)
+
     @app.post("/api/cameras")
     def add_camera(body: dict = Body(...)):
-        """Queue a new camera for the privileged helper to add + restart.
-        Accepts either a full `rtsp` URL, or `username`/`password`/`ip`
-        (+ optional `stream`, default stream2) to build a Tapo-style URL."""
+        """Queue a new camera. Accepts a full `rtsp` URL, or
+        `username`/`password`/`ip` (+ optional `stream`) to build one."""
         rtsp = (body.get("rtsp") or "").strip()
         if not rtsp:
             ip = (body.get("ip") or "").strip()
@@ -132,23 +142,15 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
                 i += 1
             cam_id = f"cam{i}"
 
-        req = {
+        queue_camera_request({
+            "action": "add",
             "id": cam_id,
             "name": (body.get("name") or "").strip(),
             "rtsp": rtsp,
             "mac": (body.get("mac") or "").strip(),
             "fps": int(body.get("fps") or 10),
             "mode": body.get("mode") if body.get("mode") in ("motion", "dnn") else "dnn",
-        }
-        os.makedirs(state_dir, exist_ok=True)
-        # Clear any stale status so the UI polls the fresh outcome.
-        for fn in ("addcamera.status",):
-            try:
-                os.remove(os.path.join(state_dir, fn))
-            except OSError:
-                pass
-        with open(os.path.join(state_dir, "addcamera.request"), "w") as f:
-            json.dump(req, f)
+        })
         return {"requested": True, "id": cam_id}
 
     @app.get("/api/cameras/add-status")
@@ -160,6 +162,47 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
                     "ts": float(parts[2]) if len(parts) > 2 else 0}
         except (OSError, ValueError, IndexError):
             return {"state": "none", "id": "-", "ts": 0}
+
+    # Parameterized routes come after the fixed ones (scan, add-status) so
+    # they don't shadow them.
+    @app.get("/api/cameras/{cam_id}")
+    def get_camera(cam_id: str):
+        """Editable fields for one camera (password never included)."""
+        cam = next((c for c in cfg.cameras if c.id == cam_id), None)
+        if cam is None:
+            raise HTTPException(404, f"unknown camera {cam_id!r}")
+        out = {
+            "id": cam.id, "name": cam.name if cam.name != cam.id else "",
+            "mode": cam.detect.mode, "fps": cam.fps, "mac": cam.mac or "",
+        }
+        if isinstance(cam.source, str) and cam.source.startswith("rtsp"):
+            parts = urlsplit(cam.source)
+            userinfo, _, hostport = parts.netloc.rpartition("@")
+            out["type"] = "rtsp"
+            out["username"] = unquote(userinfo.split(":")[0]) if userinfo else ""
+            out["ip"] = hostport.split(":")[0]
+            out["stream"] = parts.path.lstrip("/") or "stream2"
+        else:
+            out["type"] = "usb"
+            out["device"] = cam.source
+        return out
+
+    @app.patch("/api/cameras/{cam_id}")
+    def edit_camera(cam_id: str, body: dict = Body(...)):
+        if cam_id not in workers:
+            raise HTTPException(404, f"unknown camera {cam_id!r}")
+        req = {k: body.get(k) for k in
+               ("name", "username", "password", "ip", "mac", "stream", "mode", "fps", "device")}
+        req.update({"action": "update", "id": cam_id})
+        queue_camera_request(req)
+        return {"requested": True, "id": cam_id}
+
+    @app.delete("/api/cameras/{cam_id}")
+    def remove_camera(cam_id: str):
+        if cam_id not in workers:
+            raise HTTPException(404, f"unknown camera {cam_id!r}")
+        queue_camera_request({"action": "delete", "id": cam_id})
+        return {"requested": True, "id": cam_id}
 
     @app.get("/api/state")
     def state():

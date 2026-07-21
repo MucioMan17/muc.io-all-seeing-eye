@@ -50,6 +50,28 @@ class CameraView {
     this.ctx = this.canvas.getContext("2d");
     document.getElementById("grid").appendChild(this.root);
 
+    // Per-camera edit / delete (delete arms on first press, confirms on second).
+    this.editBtn = this.root.querySelector(".cam-edit");
+    this.delBtn = this.root.querySelector(".cam-del");
+    this.editBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openCameraModal(this.id);
+    });
+    this.delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.delBtn.classList.contains("armed")) {
+        deleteCamera(this.id);
+      } else {
+        this.delBtn.classList.add("armed");
+        this.delBtn.textContent = "SURE?";
+        clearTimeout(this._delTimer);
+        this._delTimer = setTimeout(() => {
+          this.delBtn.classList.remove("armed");
+          this.delBtn.innerHTML = "&times;";
+        }, 3000);
+      }
+    });
+
     this.img = new Image();
     this.reloadStream();
     // The MJPEG connection drops when the engine restarts (updates, config
@@ -416,6 +438,7 @@ const ui = {
   updating: false,
   focusInit: false,
   stateOk: true,       // is the engine currently reachable?
+  editingId: null,     // camera id being edited in the modal (null = adding)
 };
 
 // WASD mirrors the arrow pad; used for navigation only when not typing.
@@ -520,7 +543,7 @@ function toggleSolo() {
 // Modal (add-camera) focus ring — Tab / up / down cycle through its controls.
 function modalFocusables() {
   return ["ac-name", "ac-user", "ac-pass", "ac-ip", "ac-scan", "ac-found",
-          "ac-mac", "ac-cancel", "ac-add"]
+          "ac-mac", "ac-delete", "ac-cancel", "ac-add"]
     .map((id) => document.getElementById(id))
     .filter(isVisible);
 }
@@ -588,19 +611,98 @@ async function startUpdate() {
 
 document.getElementById("update-btn").addEventListener("click", startUpdate);
 
-// ---------- add camera ----------
+// ---------- add / edit / delete camera ----------
 
-function openAddcam() {
-  document.getElementById("addcam").classList.remove("hidden");
-  const msg = document.getElementById("ac-msg");
-  msg.textContent = "";
-  msg.className = "";
-  setTimeout(() => document.getElementById("ac-name").focus(), 50);
+const $ = (id) => document.getElementById(id);
+
+function openCameraModal(camId = null) {
+  ui.editingId = camId;
+  for (const id of ["ac-name", "ac-user", "ac-pass", "ac-ip", "ac-mac"]) $(id).value = "";
+  $("ac-found").classList.add("hidden");
+  $("ac-msg").textContent = "";
+  $("ac-msg").className = "";
+  $("ac-rtsp").classList.remove("hidden");
+  const del = $("ac-delete");
+  del.classList.remove("armed");
+  del.textContent = "Delete";
+
+  if (camId) {
+    $("ac-title").textContent = "EDIT CAMERA";
+    $("ac-add").textContent = "Save";
+    $("ac-pass-note").textContent = "(leave blank to keep current)";
+    $("ac-hint").textContent = "Change this camera's settings. Leave the password blank to keep the current one.";
+    del.classList.remove("hidden");
+    fetch(`/api/cameras/${encodeURIComponent(camId)}`)
+      .then((r) => r.json())
+      .then((cam) => {
+        $("ac-name").value = cam.name || "";
+        if (cam.type === "usb") {
+          $("ac-rtsp").classList.add("hidden"); // USB webcam: only the name is editable here
+        } else {
+          $("ac-user").value = cam.username || "";
+          $("ac-ip").value = cam.ip || "";
+          $("ac-mac").value = cam.mac || "";
+        }
+      })
+      .catch(() => {});
+  } else {
+    $("ac-title").textContent = "ADD CAMERA";
+    $("ac-add").textContent = "Add camera";
+    $("ac-pass-note").textContent = "";
+    $("ac-hint").textContent = "For a WiFi/IP camera (e.g. Tapo). Enter the camera account, then Scan to find it — or type its IP.";
+    del.classList.add("hidden");
+  }
+  $("addcam").classList.remove("hidden");
+  setTimeout(() => $("ac-name").focus(), 50);
 }
 
+function openAddcam() { openCameraModal(null); }
+
 function closeAddcam() {
-  document.getElementById("addcam").classList.add("hidden");
-  document.getElementById("addcam-btn").focus(); // return the cursor to where it was
+  $("addcam").classList.add("hidden");
+  $("addcam-btn").focus(); // return the cursor to where it was
+}
+
+// Poll the shared camera-op status file; reload the page when it completes.
+function pollCameraOp(onFail) {
+  const t0 = Date.now();
+  const poll = setInterval(async () => {
+    if (Date.now() - t0 > 90000) {
+      clearInterval(poll);
+      onFail("Timed out — check the camera and try again.");
+      return;
+    }
+    let st;
+    try {
+      st = await (await fetch("/api/cameras/add-status")).json();
+    } catch {
+      return; // engine restarting mid-op — keep polling
+    }
+    if (!st || st.state === "none") return;
+    clearInterval(poll);
+    if (["added", "updated", "deleted"].includes(st.state)) {
+      const msg = $("ac-msg");
+      msg.className = "ok";
+      msg.textContent = "Done! Reloading…";
+      setTimeout(() => location.reload(), 1000);
+    } else if (st.state === "exists") {
+      onFail("That camera is already set up.");
+    } else {
+      onFail("Could not apply the change — check the details and try again.");
+    }
+  }, 2000);
+}
+
+async function deleteCamera(camId) {
+  const msg = $("ac-msg");
+  msg.className = "";
+  msg.textContent = "Removing camera…";
+  try {
+    await fetch(`/api/cameras/${encodeURIComponent(camId)}`, { method: "DELETE" });
+  } catch {
+    return;
+  }
+  pollCameraOp((t) => { msg.className = "error"; msg.textContent = t; });
 }
 
 async function scanForCameras() {
@@ -638,75 +740,48 @@ async function scanForCameras() {
 }
 
 async function submitAddcam() {
-  const msg = document.getElementById("ac-msg");
-  const addBtn = document.getElementById("ac-add");
-  const val = (id) => document.getElementById(id).value.trim();
+  const msg = $("ac-msg");
+  const addBtn = $("ac-add");
+  const val = (id) => $(id).value.trim();
+  const editing = ui.editingId;
+  const usb = $("ac-rtsp").classList.contains("hidden");
   const body = {
     name: val("ac-name"),
     username: val("ac-user"),
-    password: document.getElementById("ac-pass").value,
+    password: $("ac-pass").value,
     ip: val("ac-ip"),
     mac: val("ac-mac"),
   };
-  if (!body.ip) {
+  // IP is required only when adding an IP camera (not editing, not USB).
+  if (!editing && !usb && !body.ip) {
     msg.className = "error";
     msg.textContent = "Enter the camera's IP (or Scan to find it).";
     return;
   }
-  addBtn.disabled = true;
-  addBtn.textContent = "Adding…";
-  msg.className = "";
-  msg.textContent = "Adding camera…";
 
+  const label = addBtn.textContent;
+  addBtn.disabled = true;
+  addBtn.textContent = editing ? "Saving…" : "Adding…";
+  msg.className = "";
+  msg.textContent = editing ? "Saving…" : "Adding camera…";
+
+  const restore = (t) => {
+    msg.className = "error";
+    msg.textContent = t;
+    addBtn.disabled = false;
+    addBtn.textContent = label;
+  };
   try {
-    await fetch("/api/cameras", {
-      method: "POST",
+    await fetch(editing ? `/api/cameras/${encodeURIComponent(editing)}` : "/api/cameras", {
+      method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch {
-    msg.className = "error";
-    msg.textContent = "Request failed.";
-    addBtn.disabled = false;
-    addBtn.textContent = "Add camera";
+    restore("Request failed.");
     return;
   }
-
-  // The POST clears prior status; the privileged helper writes the outcome.
-  const t0 = Date.now();
-  const poll = setInterval(async () => {
-    if (Date.now() - t0 > 90000) {
-      clearInterval(poll);
-      msg.className = "error";
-      msg.textContent = "Timed out — check the camera and try again.";
-      addBtn.disabled = false;
-      addBtn.textContent = "Add camera";
-      return;
-    }
-    let st;
-    try {
-      st = await (await fetch("/api/cameras/add-status")).json();
-    } catch {
-      return;
-    }
-    if (!st || st.state === "none") return;
-    clearInterval(poll);
-    if (st.state === "added") {
-      msg.className = "ok";
-      msg.textContent = "Added! Reloading…";
-      setTimeout(() => location.reload(), 1200);
-    } else if (st.state === "exists") {
-      msg.className = "ok";
-      msg.textContent = "That camera is already set up.";
-      addBtn.disabled = false;
-      addBtn.textContent = "Add camera";
-    } else {
-      msg.className = "error";
-      msg.textContent = "Could not add the camera — check the details and try again.";
-      addBtn.disabled = false;
-      addBtn.textContent = "Add camera";
-    }
-  }, 2000);
+  pollCameraOp(restore);
 }
 
 document.getElementById("addcam-btn").addEventListener("click", openAddcam);
@@ -714,11 +789,22 @@ document.getElementById("addcam-close").addEventListener("click", closeAddcam);
 document.getElementById("ac-cancel").addEventListener("click", closeAddcam);
 document.getElementById("ac-scan").addEventListener("click", scanForCameras);
 document.getElementById("ac-add").addEventListener("click", submitAddcam);
+document.getElementById("ac-delete").addEventListener("click", () => {
+  const b = $("ac-delete");
+  if (b.classList.contains("armed")) {
+    b.classList.remove("armed");
+    deleteCamera(ui.editingId);
+  } else {
+    b.classList.add("armed");
+    b.textContent = "Confirm delete";
+    setTimeout(() => { b.classList.remove("armed"); b.textContent = "Delete"; }, 3000);
+  }
+});
 document.getElementById("ac-found").addEventListener("change", (e) => {
   if (!e.target.value) return;
   const c = JSON.parse(e.target.value);
-  document.getElementById("ac-ip").value = c.ip;
-  if (c.mac && c.mac !== "unknown") document.getElementById("ac-mac").value = c.mac;
+  $("ac-ip").value = c.ip;
+  if (c.mac && c.mac !== "unknown") $("ac-mac").value = c.mac;
 });
 document.getElementById("addcam").addEventListener("click", (e) => {
   if (e.target.id === "addcam") closeAddcam();
