@@ -1,4 +1,11 @@
-from allseeingeye.discover import normalize_mac, parse_arp_table, substitute_host
+from allseeingeye.discover import (
+    _arp_table_map,
+    normalize_mac,
+    parse_arp_table,
+    substitute_host,
+)
+import builtins
+from unittest import mock
 
 ARP = """\
 IP address       HW type     Flags       HW address            Mask     Device
@@ -40,3 +47,11 @@ def test_substitute_host_password_with_at_sign():
 
 def test_substitute_host_no_credentials_no_port():
     assert substitute_host("rtsp://oldhost/stream1", "10.0.0.9") == "rtsp://10.0.0.9/stream1"
+
+
+def test_arp_table_map_reverse_lookup():
+    with mock.patch("builtins.open", mock.mock_open(read_data=ARP)):
+        table = _arp_table_map()
+    assert table["192.168.1.50"] == "aa:bb:cc:dd:ee:ff"
+    # incomplete (0x0) entries are excluded
+    assert "192.168.1.99" not in table

@@ -76,15 +76,77 @@ def _local_networks() -> List[ipaddress.IPv4Network]:
     return nets
 
 
-def _probe(ip: str, port: int) -> None:
+def _probe(ip: str, port: int) -> bool:
+    """Try to open a TCP connection; return True if the port accepts it.
+    (Also populates the kernel ARP table as a side effect.)"""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(PROBE_TIMEOUT)
     try:
         s.connect((ip, port))
+        return True
     except OSError:
-        pass
+        return False
     finally:
         s.close()
+
+
+def _arp_table_map() -> dict:
+    """Return {ip: mac} for all complete entries in the ARP table."""
+    out = {}
+    try:
+        with open("/proc/net/arp") as f:
+            for line in f.read().splitlines()[1:]:
+                parts = line.split()
+                if len(parts) >= 4 and parts[2] != "0x0":
+                    out[parts[0]] = normalize_mac(parts[3])
+    except OSError:
+        pass
+    return out
+
+
+def scan_rtsp_hosts(port: int = 554) -> List[dict]:
+    """Sweep local subnets for hosts with the RTSP port open, returning
+    [{"ip": ..., "mac": ...}] — i.e. likely IP cameras on the network."""
+    found: List[dict] = []
+    for net in _local_networks():
+        hosts = [str(h) for h in net.hosts()]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=SWEEP_WORKERS) as pool:
+            open_flags = list(pool.map(lambda ip: _probe(ip, port), hosts))
+        arp = _arp_table_map()
+        for ip, is_open in zip(hosts, open_flags):
+            if is_open:
+                found.append({"ip": ip, "mac": arp.get(ip, "unknown")})
+    return found
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="python -m allseeingeye.discover",
+        description="Scan the local network for RTSP cameras (open port 554).",
+    )
+    parser.add_argument("--port", type=int, default=554, help="RTSP port (default 554)")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    print(f"Scanning local network for cameras on port {args.port} ...")
+    hosts = scan_rtsp_hosts(args.port)
+    if not hosts:
+        print("No cameras found. Make sure the camera is powered on and joined")
+        print("to the same WiFi/LAN, then try again.")
+        return
+    print(f"\nFound {len(hosts)} camera(s):\n")
+    print(f"  {'IP ADDRESS':<16} MAC ADDRESS")
+    print(f"  {'-' * 16} {'-' * 17}")
+    for h in hosts:
+        print(f"  {h['ip']:<16} {h['mac']}")
+    print("\nPaste this to set up the camera. The MAC lets the Pi follow it")
+    print("even if its IP changes.")
+
+
+if __name__ == "__main__":
+    main()
 
 
 def find_ip_for_mac(mac: str, probe_port: int = 554) -> Optional[str]:

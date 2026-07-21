@@ -41,6 +41,20 @@ account.** Recommended, all verified RTSP-friendly:
 Flock hardware — they're cloud-locked and don't expose local streams, so
 they can't feed your own AI.
 
+### Finding a camera on your network
+
+After a camera joins your WiFi, find its IP and MAC without digging through
+the router — on the Pi:
+
+```bash
+cd ~/muc.io-all-seeing-eye
+.venv/bin/python -m allseeingeye.discover     # or: /opt/allseeingeye/venv/bin/python -m allseeingeye.discover
+```
+
+It scans the LAN and lists every device with the RTSP port (554) open —
+i.e. your cameras — with their IP and MAC address. Put the MAC in the
+camera's config `mac:` field and the Pi will follow it across IP changes.
+
 ### Practical tips
 
 - **Use the sub-stream** for detection (e.g. 704×480 or 640×360 at 10–15fps).
