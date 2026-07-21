@@ -410,7 +410,11 @@ function toggleSolo() {
 }
 
 function topbarFocusables() {
-  return [...document.querySelectorAll("#sites a"), document.getElementById("update-btn")];
+  return [
+    ...document.querySelectorAll("#sites a"),
+    document.getElementById("addcam-btn"),
+    document.getElementById("update-btn"),
+  ];
 }
 
 function setTopbarFocus(i) {
@@ -486,6 +490,141 @@ async function startUpdate() {
 }
 
 document.getElementById("update-btn").addEventListener("click", startUpdate);
+
+// ---------- add camera ----------
+
+function openAddcam() {
+  document.getElementById("addcam").classList.remove("hidden");
+  const msg = document.getElementById("ac-msg");
+  msg.textContent = "";
+  msg.className = "";
+  setTimeout(() => document.getElementById("ac-name").focus(), 50);
+}
+
+function closeAddcam() {
+  document.getElementById("addcam").classList.add("hidden");
+}
+
+async function scanForCameras() {
+  const btn = document.getElementById("ac-scan");
+  const msg = document.getElementById("ac-msg");
+  const sel = document.getElementById("ac-found");
+  btn.disabled = true;
+  btn.textContent = "Scanning…";
+  msg.className = "";
+  msg.textContent = "Scanning your network (up to a minute)…";
+  try {
+    const { cameras } = await (await fetch("/api/cameras/scan")).json();
+    if (!cameras.length) {
+      msg.className = "error";
+      msg.textContent = "No cameras found. Make sure it's on the same WiFi, then Scan again.";
+    } else {
+      sel.innerHTML = '<option value="">— pick a found camera —</option>';
+      for (const c of cameras) {
+        const o = document.createElement("option");
+        o.value = JSON.stringify(c);
+        o.textContent = `${c.ip}   (${c.mac})`;
+        sel.appendChild(o);
+      }
+      sel.classList.remove("hidden");
+      msg.className = "ok";
+      msg.textContent = `Found ${cameras.length} camera(s) — pick one below.`;
+    }
+  } catch {
+    msg.className = "error";
+    msg.textContent = "Scan failed.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Scan";
+  }
+}
+
+async function submitAddcam() {
+  const msg = document.getElementById("ac-msg");
+  const addBtn = document.getElementById("ac-add");
+  const val = (id) => document.getElementById(id).value.trim();
+  const body = {
+    name: val("ac-name"),
+    username: val("ac-user"),
+    password: document.getElementById("ac-pass").value,
+    ip: val("ac-ip"),
+    mac: val("ac-mac"),
+  };
+  if (!body.ip) {
+    msg.className = "error";
+    msg.textContent = "Enter the camera's IP (or Scan to find it).";
+    return;
+  }
+  addBtn.disabled = true;
+  addBtn.textContent = "Adding…";
+  msg.className = "";
+  msg.textContent = "Adding camera…";
+
+  try {
+    await fetch("/api/cameras", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    msg.className = "error";
+    msg.textContent = "Request failed.";
+    addBtn.disabled = false;
+    addBtn.textContent = "Add camera";
+    return;
+  }
+
+  // The POST clears prior status; the privileged helper writes the outcome.
+  const t0 = Date.now();
+  const poll = setInterval(async () => {
+    if (Date.now() - t0 > 90000) {
+      clearInterval(poll);
+      msg.className = "error";
+      msg.textContent = "Timed out — check the camera and try again.";
+      addBtn.disabled = false;
+      addBtn.textContent = "Add camera";
+      return;
+    }
+    let st;
+    try {
+      st = await (await fetch("/api/cameras/add-status")).json();
+    } catch {
+      return;
+    }
+    if (!st || st.state === "none") return;
+    clearInterval(poll);
+    if (st.state === "added") {
+      msg.className = "ok";
+      msg.textContent = "Added! Reloading…";
+      setTimeout(() => location.reload(), 1200);
+    } else if (st.state === "exists") {
+      msg.className = "ok";
+      msg.textContent = "That camera is already set up.";
+      addBtn.disabled = false;
+      addBtn.textContent = "Add camera";
+    } else {
+      msg.className = "error";
+      msg.textContent = "Could not add the camera — check the details and try again.";
+      addBtn.disabled = false;
+      addBtn.textContent = "Add camera";
+    }
+  }, 2000);
+}
+
+document.getElementById("addcam-btn").addEventListener("click", openAddcam);
+document.getElementById("addcam-close").addEventListener("click", closeAddcam);
+document.getElementById("ac-cancel").addEventListener("click", closeAddcam);
+document.getElementById("ac-scan").addEventListener("click", scanForCameras);
+document.getElementById("ac-add").addEventListener("click", submitAddcam);
+document.getElementById("ac-found").addEventListener("change", (e) => {
+  if (!e.target.value) return;
+  const c = JSON.parse(e.target.value);
+  document.getElementById("ac-ip").value = c.ip;
+  if (c.mac && c.mac !== "unknown") document.getElementById("ac-mac").value = c.mac;
+});
+document.getElementById("addcam").addEventListener("click", (e) => {
+  if (e.target.id === "addcam") closeAddcam();
+});
 
 function moveEventSel(d) {
   if (!ui.eventsCache.length) return;
@@ -600,6 +739,17 @@ document.addEventListener("keydown", (e) => {
   const key = e.key;
   const low = key.toLowerCase();
   const nav = NAV_KEYS[key] || NAV_KEYS[low];
+
+  // Never hijack typing in a form field (the add-camera modal).
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) {
+    if (key === "Escape") e.target.blur();
+    return;
+  }
+  // Add-camera modal open: only Esc (close); its own buttons do the rest.
+  if (!document.getElementById("addcam").classList.contains("hidden")) {
+    if (key === "Escape") closeAddcam();
+    return;
+  }
 
   const modalOpen = !document.getElementById("modal").classList.contains("hidden");
   if (modalOpen) {

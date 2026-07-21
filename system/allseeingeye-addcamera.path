@@ -1,0 +1,8 @@
+[Unit]
+Description=Watch for add-camera requests from the All-Seeing Eye UI
+
+[Path]
+PathExists=/var/lib/allseeingeye/addcamera.request
+
+[Install]
+WantedBy=multi-user.target

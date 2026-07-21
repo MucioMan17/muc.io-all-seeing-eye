@@ -1,3 +1,4 @@
+import json
 import time
 
 import pytest
@@ -119,6 +120,38 @@ def test_update_request_creates_flag_and_status_roundtrip(client, tmp_path):
 
 def test_state_includes_build(client):
     assert client.get("/api/state").json()["build"] == "dev"
+
+
+def test_add_camera_builds_rtsp_and_writes_request(client, tmp_path):
+    import os
+    state_dir = os.path.dirname(str(tmp_path))
+    req_path = os.path.join(state_dir, "addcamera.request")
+    try:
+        r = client.post("/api/cameras", json={
+            "username": "allseeingeye", "password": "p@ss:word",
+            "ip": "192.168.1.50", "mac": "0C:EF:15:12:3A:18", "name": "Yard",
+        })
+        body = r.json()
+        assert body["requested"] is True
+        # first added camera alongside the fixture's 'demo' -> cam2
+        assert body["id"] == "cam2"
+        with open(req_path) as f:
+            req = json.load(f)
+        # password special chars are URL-encoded in the built rtsp
+        assert req["rtsp"] == "rtsp://allseeingeye:p%40ss%3Aword@192.168.1.50:554/stream2"
+        assert req["mac"] == "0C:EF:15:12:3A:18"
+        assert req["name"] == "Yard"
+    finally:
+        if os.path.exists(req_path):
+            os.remove(req_path)
+
+
+def test_add_camera_requires_ip_or_rtsp(client):
+    assert client.post("/api/cameras", json={"username": "x"}).status_code == 400
+
+
+def test_add_camera_status_default(client):
+    assert client.get("/api/cameras/add-status").json()["state"] == "none"
 
 
 def test_media_path_confined(client):

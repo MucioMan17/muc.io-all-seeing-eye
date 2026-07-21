@@ -47,7 +47,7 @@ body {
 
 #clock { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
 
-#update-btn {
+#update-btn, #addcam-btn {
   background: none;
   border: 1px solid var(--line);
   color: var(--dim);
@@ -58,7 +58,8 @@ body {
   padding: 4px 12px;
   cursor: pointer;
 }
-#update-btn:hover, #update-btn.focused, #sites a.focused {
+#update-btn:hover, #update-btn.focused, #sites a.focused,
+#addcam-btn:hover, #addcam-btn.focused {
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -188,6 +189,77 @@ main { flex: 1; display: flex; min-height: 0; }
 #modal-video { max-width: 76vw; max-height: 70vh; display: block; }
 #modal-caption { padding-top: 8px; font-size: 13px; color: var(--dim); }
 #modal-close {
+  position: absolute; top: 6px; right: 10px;
+  background: none; border: none; color: var(--text);
+  font-size: 22px; cursor: pointer;
+}
+
+/* Add-camera modal */
+#addcam {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 70;
+  padding: 16px;
+}
+#addcam.hidden { display: none; }
+#addcam-body {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 20px 24px;
+  width: 380px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 0 30px rgba(53, 224, 161, 0.15);
+}
+#addcam-body h3 { letter-spacing: 2px; font-size: 14px; color: var(--accent); margin-bottom: 8px; }
+.addcam-hint { font-size: 12px; color: var(--dim); margin-bottom: 14px; line-height: 1.5; }
+#addcam-body label {
+  display: block;
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 12px;
+}
+#addcam-body .opt { color: var(--line); }
+#addcam-body input, #addcam-body select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+}
+#addcam-body input:focus, #addcam-body select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.ac-row { display: flex; gap: 8px; align-items: flex-end; }
+.ac-row .grow { flex: 1; }
+#ac-scan {
+  background: none; border: 1px solid var(--line); color: var(--text);
+  border-radius: 4px; font: inherit; font-size: 13px;
+  padding: 8px 12px; margin-bottom: 12px; cursor: pointer; white-space: nowrap;
+}
+#ac-scan:hover { border-color: var(--accent); color: var(--accent); }
+#ac-msg { font-size: 12px; color: var(--dim); min-height: 16px; margin-bottom: 8px; }
+#ac-msg.error { color: var(--alert); }
+#ac-msg.ok { color: var(--accent); }
+.ac-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.ac-actions button {
+  background: none; border: 1px solid var(--line); color: var(--text);
+  border-radius: 4px; font: inherit; font-size: 13px;
+  padding: 8px 16px; cursor: pointer;
+}
+.ac-actions .primary { border-color: var(--accent); color: var(--accent); }
+.ac-actions button:disabled { opacity: 0.4; cursor: default; }
+#addcam-close {
   position: absolute; top: 6px; right: 10px;
   background: none; border: none; color: var(--text);
   font-size: 22px; cursor: pointer;

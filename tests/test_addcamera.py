@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
-from allseeingeye.addcamera import add_camera, build_block
+import allseeingeye.addcamera as ac
+from allseeingeye.addcamera import add_camera, apply, build_block
 from allseeingeye.config import load_config
 
 BASE = """\
@@ -65,3 +68,46 @@ def test_missing_cameras_key_raises():
 def test_block_without_mac_omits_field():
     block = build_block("c", "rtsp://h/s", None, 10, "dnn", None)
     assert "mac:" not in block
+
+
+def test_apply_writes_config_and_status(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(BASE)
+    status = tmp_path / "status"
+    monkeypatch.setattr(ac, "STATUS_FILE", str(status))
+
+    rc = apply(str(cfg), "cam2", "rtsp://u:p@h:554/stream2",
+               "0C:EF:15:12:3A:18", 10, "dnn", None, restart=False, status=True)
+    assert rc == 0
+    assert status.read_text().startswith("added cam2 ")
+    parsed = load_config(str(cfg))
+    assert {c.id for c in parsed.cameras} == {"front", "cam2"}
+
+
+def test_from_request_consumes_file_and_reports(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(BASE)
+    status = tmp_path / "status"
+    monkeypatch.setattr(ac, "STATUS_FILE", str(status))
+    monkeypatch.setattr(ac.subprocess, "run", lambda *a, **k: None)  # no real systemctl
+
+    req = tmp_path / "addcamera.request"
+    req.write_text(json.dumps({
+        "id": "cam2", "rtsp": "rtsp://u:p@h:554/stream2",
+        "mac": "0C:EF:15:12:3A:18", "fps": 10, "mode": "dnn", "name": "",
+    }))
+    rc = ac._from_request(str(req), str(cfg))
+    assert rc == 0
+    assert not req.exists()  # request consumed
+    assert status.read_text().startswith("added cam2 ")
+
+
+def test_from_request_bad_json_reports_error(tmp_path, monkeypatch):
+    status = tmp_path / "status"
+    monkeypatch.setattr(ac, "STATUS_FILE", str(status))
+    req = tmp_path / "addcamera.request"
+    req.write_text("{not json")
+    rc = ac._from_request(str(req), str(tmp_path / "config.yml"))
+    assert rc == 1
+    assert not req.exists()
+    assert status.read_text().startswith("error ")

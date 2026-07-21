@@ -50,7 +50,10 @@ sudo reboot
 The display now boots into the console, and the same UI is at
 `http://<pi-address>:8080` from any phone/laptop on your network.
 
-- Cameras + settings: `/etc/allseeingeye/config.yml`
+- Add a camera from the UI: the **+ CAMERA** button in the top bar — enter
+  the camera's account + IP (or **Scan** to find it), no terminal needed.
+  Works great from your phone. Advanced/manual setup lives in
+  `/etc/allseeingeye/config.yml`
   (see [config/config.example.yml](config/config.example.yml)), then
   `sudo systemctl restart allseeingeye`.
 - Labeled detection (person/car/…): `bash scripts/download-models.sh`, set

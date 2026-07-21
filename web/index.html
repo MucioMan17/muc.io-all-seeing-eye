@@ -13,6 +13,7 @@
       <h1>MUC.IO ALL SEEING EYE</h1>
     </div>
     <nav id="sites"></nav>
+    <button id="addcam-btn" title="add a camera">+ CAMERA</button>
     <button id="update-btn" title="pull the latest version and reinstall">UPDATE</button>
     <div id="clock"></div>
   </header>
@@ -27,6 +28,44 @@
       <div id="events"></div>
     </aside>
   </main>
+
+  <div id="addcam" class="hidden">
+    <div id="addcam-body">
+      <button id="addcam-close" title="close">&times;</button>
+      <h3>ADD CAMERA</h3>
+      <p class="addcam-hint">For a WiFi/IP camera (e.g. Tapo). Enter the camera
+        account you made in the camera's app, then Scan to find it — or type its
+        IP in yourself.</p>
+
+      <label>Name <span class="opt">(optional)</span>
+        <input id="ac-name" type="text" placeholder="Driveway" autocomplete="off">
+      </label>
+      <label>Username
+        <input id="ac-user" type="text" placeholder="camera account username" autocomplete="off">
+      </label>
+      <label>Password
+        <input id="ac-pass" type="password" placeholder="camera account password" autocomplete="off">
+      </label>
+
+      <div class="ac-row">
+        <label class="grow">Camera IP
+          <input id="ac-ip" type="text" placeholder="192.168.1.50" autocomplete="off">
+        </label>
+        <button id="ac-scan" type="button">Scan</button>
+      </div>
+      <select id="ac-found" class="hidden"></select>
+
+      <label>MAC <span class="opt">(recommended — follows IP changes)</span>
+        <input id="ac-mac" type="text" placeholder="0C:EF:15:12:3A:18" autocomplete="off">
+      </label>
+
+      <div id="ac-msg"></div>
+      <div class="ac-actions">
+        <button id="ac-cancel" type="button">Cancel</button>
+        <button id="ac-add" type="button" class="primary">Add camera</button>
+      </div>
+    </div>
+  </div>
 
   <div id="modal" class="hidden">
     <div id="modal-body">

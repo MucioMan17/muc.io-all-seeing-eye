@@ -66,6 +66,8 @@ install -m 0644 "$REPO_DIR/system/allseeingeye.service" /etc/systemd/system/
 install -m 0644 "$REPO_DIR/system/allseeingeye-kiosk.service" /etc/systemd/system/
 install -m 0644 "$REPO_DIR/system/allseeingeye-update.service" /etc/systemd/system/
 install -m 0644 "$REPO_DIR/system/allseeingeye-update.path" /etc/systemd/system/
+install -m 0644 "$REPO_DIR/system/allseeingeye-addcamera.service" /etc/systemd/system/
+install -m 0644 "$REPO_DIR/system/allseeingeye-addcamera.path" /etc/systemd/system/
 # Retire the old periodic auto-update timer in favor of on-demand updates.
 systemctl disable --now allseeingeye-update.timer 2>/dev/null || true
 rm -f /etc/systemd/system/allseeingeye-update.timer
@@ -90,6 +92,9 @@ EOF
 else
     echo "    not a git checkout — UI updates disabled"
 fi
+
+# Add-camera requests from the UI (works regardless of git state).
+systemctl enable --now allseeingeye-addcamera.path
 
 if [[ -e /dev/tty1 ]]; then
     # The kiosk owns tty1; getty must not fight it for the terminal.

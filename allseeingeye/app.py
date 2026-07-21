@@ -13,18 +13,21 @@ Serves the web UI plus:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
+from urllib.parse import quote
 from typing import Dict
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .camera import CameraWorker
 from .config import AppConfig
+from .discover import scan_rtsp_hosts
 from .recorder import EventLog
 
 log = logging.getLogger(__name__)
@@ -82,6 +85,65 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
             }
         except (OSError, ValueError, IndexError):
             return {"state": "none", "commit": "-", "ts": 0}
+
+    @app.get("/api/cameras/scan")
+    async def scan_cameras():
+        """Find RTSP cameras on the LAN (open port 554)."""
+        hosts = await asyncio.to_thread(scan_rtsp_hosts)
+        return {"cameras": hosts}
+
+    @app.post("/api/cameras")
+    def add_camera(body: dict = Body(...)):
+        """Queue a new camera for the privileged helper to add + restart.
+        Accepts either a full `rtsp` URL, or `username`/`password`/`ip`
+        (+ optional `stream`, default stream2) to build a Tapo-style URL."""
+        rtsp = (body.get("rtsp") or "").strip()
+        if not rtsp:
+            ip = (body.get("ip") or "").strip()
+            if not ip:
+                raise HTTPException(400, "provide either rtsp or ip")
+            user = quote(str(body.get("username", "")), safe="")
+            pw = quote(str(body.get("password", "")), safe="")
+            stream = (body.get("stream") or "stream2").strip().lstrip("/")
+            creds = f"{user}:{pw}@" if user or pw else ""
+            rtsp = f"rtsp://{creds}{ip}:554/{stream}"
+
+        existing = set(workers.keys())
+        cam_id = (body.get("id") or "").strip()
+        if not cam_id or cam_id in existing:
+            i = 2
+            while f"cam{i}" in existing:
+                i += 1
+            cam_id = f"cam{i}"
+
+        req = {
+            "id": cam_id,
+            "name": (body.get("name") or "").strip(),
+            "rtsp": rtsp,
+            "mac": (body.get("mac") or "").strip(),
+            "fps": int(body.get("fps") or 10),
+            "mode": body.get("mode") if body.get("mode") in ("motion", "dnn") else "dnn",
+        }
+        os.makedirs(state_dir, exist_ok=True)
+        # Clear any stale status so the UI polls the fresh outcome.
+        for fn in ("addcamera.status",):
+            try:
+                os.remove(os.path.join(state_dir, fn))
+            except OSError:
+                pass
+        with open(os.path.join(state_dir, "addcamera.request"), "w") as f:
+            json.dump(req, f)
+        return {"requested": True, "id": cam_id}
+
+    @app.get("/api/cameras/add-status")
+    def add_camera_status():
+        try:
+            with open(os.path.join(state_dir, "addcamera.status")) as f:
+                parts = f.read().split()
+            return {"state": parts[0], "id": parts[1] if len(parts) > 1 else "-",
+                    "ts": float(parts[2]) if len(parts) > 2 else 0}
+        except (OSError, ValueError, IndexError):
+            return {"state": "none", "id": "-", "ts": 0}
 
     @app.get("/api/state")
     def state():

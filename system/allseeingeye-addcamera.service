@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply an add-camera request from the All-Seeing Eye UI
+
+[Service]
+Type=oneshot
+# Needs the app importable; run from the installed app dir with its venv.
+WorkingDirectory=/opt/allseeingeye
+ExecStart=/opt/allseeingeye/venv/bin/python -m allseeingeye.addcamera \
+    --from-request /var/lib/allseeingeye/addcamera.request \
+    --config /etc/allseeingeye/config.yml
