@@ -164,11 +164,18 @@ class CameraWorker(threading.Thread):
                             self.cfg.id, self.cfg.mac, self._known_ip)
             if self._known_ip:
                 src = substitute_host(src, self._known_ip)
-        cap = cv2.VideoCapture(src)
         if isinstance(src, int):
+            # USB webcam: force the V4L2 backend and MJPEG. Most webcams only
+            # deliver 720p+ as MJPEG — raw YUYV at that size exceeds USB
+            # bandwidth and fails with a v4l2 "Internal data stream error".
+            # FOURCC must be set before the resolution.
+            cap = cv2.VideoCapture(src, cv2.CAP_V4L2)
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
             cap.set(cv2.CAP_PROP_FPS, self.cfg.fps)
+        else:
+            cap = cv2.VideoCapture(src)
         # Keep RTSP latency down: don't buffer stale frames.
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
         return cap
