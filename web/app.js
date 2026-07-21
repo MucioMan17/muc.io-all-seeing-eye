@@ -51,7 +51,14 @@ class CameraView {
     document.getElementById("grid").appendChild(this.root);
 
     this.img = new Image();
-    this.img.src = `/api/stream/${this.id}?t=${Date.now()}`;
+    this.reloadStream();
+    // The MJPEG connection drops when the engine restarts (updates, config
+    // changes) — reconnect it instead of showing a frozen/broken frame.
+    this.img.addEventListener("error", () => {
+      clearTimeout(this._streamRetry);
+      this._streamRetry = setTimeout(() => this.reloadStream(), 2000);
+    });
+    this._wasOnline = false;
 
     // Motion sensitivity slider (per camera, persisted server-side).
     this.slider = this.root.querySelector(".cc-slider");
@@ -100,7 +107,14 @@ class CameraView {
     this.ws.onerror = () => this.ws.close();
   }
 
+  reloadStream() {
+    this.img.src = `/api/stream/${this.id}?t=${Date.now()}`;
+  }
+
   setStatus(online) {
+    // A camera that just came back online needs its stream reconnected.
+    if (online && !this._wasOnline) this.reloadStream();
+    this._wasOnline = online;
     const stale = performance.now() - this.payloadAt > 4000;
     if (!online) {
       this.statusEl.textContent = "OFFLINE";
@@ -401,6 +415,7 @@ const ui = {
   confirmClear: false, // "delete ALL events?" pending confirmation
   updating: false,
   focusInit: false,
+  stateOk: true,       // is the engine currently reachable?
 };
 
 // WASD mirrors the arrow pad; used for navigation only when not typing.
@@ -712,8 +727,19 @@ document.getElementById("addcam").addEventListener("click", (e) => {
 // ---------- bootstrap ----------
 
 async function loadState() {
-  const res = await fetch("/api/state");
-  const state = await res.json();
+  let state;
+  try {
+    state = await (await fetch("/api/state")).json();
+  } catch {
+    ui.stateOk = false; // engine unreachable (restarting / updating)
+    return;
+  }
+  if (ui.stateOk === false) {
+    // Engine just came back — MJPEG streams don't fire errors when the
+    // connection drops, so reconnect every camera's stream explicitly.
+    for (const c of cameras.values()) c.reloadStream();
+  }
+  ui.stateOk = true;
 
   const sites = document.getElementById("sites");
   sites.innerHTML = "";
