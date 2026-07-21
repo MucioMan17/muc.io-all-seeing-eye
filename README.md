@@ -38,7 +38,8 @@ the Pi. No cloud, no accounts, no footage leaving your network.
 
 ## Quick start (Pi 500)
 
-Flash **Raspberry Pi OS Lite (64-bit)**, boot, SSH in:
+Flash **Raspberry Pi OS (64-bit) Desktop** (use the Desktop version if you
+want remote access via Raspberry Pi Connect — see below), boot, then:
 
 ```bash
 git clone https://github.com/MucioMan17/muc.io-all-seeing-eye.git
@@ -49,6 +50,12 @@ sudo reboot
 
 The display now boots into the console, and the same UI is at
 `http://<pi-address>:8080` from any phone/laptop on your network.
+
+**Remote access from anywhere:** the installer enables **Raspberry Pi
+Connect** on Desktop OS. Run `rpi-connect signin` once, then view the Pi from
+anywhere at [connect.raspberrypi.com](https://connect.raspberrypi.com). Do this
+on each house's Pi to check both locations from one account — no VPN, no
+port-forwarding. (Connect screen sharing requires Desktop OS, not Lite.)
 
 - Add a camera from the UI: the **+ CAMERA** button in the top bar — enter
   the camera's account + IP (or **Scan** to find it), no terminal needed.

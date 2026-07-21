@@ -1,12 +1,22 @@
 # Building a flashable All-Seeing Eye OS image
 
-Two ways to get a Pi that boots straight into the camera console:
+The installer auto-detects your OS and sets up the right kind of kiosk:
 
-## Option A — installer over Raspberry Pi OS Lite (recommended to start)
+- **Raspberry Pi OS Desktop (64-bit)** → runs the console inside the desktop
+  session and enables **Raspberry Pi Connect**, so you can view the Pi from
+  anywhere at connect.raspberrypi.com. **Choose this for remote access / the
+  two-house setup.** (Screen sharing needs Desktop; it does not work on Lite.)
+- **Raspberry Pi OS Lite (64-bit)** → runs a lightweight bare kiosk. Great for
+  a local-only appliance, but no Connect screen sharing.
 
-1. Flash **Raspberry Pi OS Lite (64-bit)** with Raspberry Pi Imager.
-   In the Imager's settings, set hostname, enable SSH, and configure WiFi.
-2. Boot the Pi 500, SSH in, then:
+Override auto-detection with `ASE_KIOSK=desktop` or `ASE_KIOSK=cage` if needed.
+
+## Option A — installer over Raspberry Pi OS (recommended to start)
+
+1. Flash **Raspberry Pi OS (64-bit) — the full Desktop version** with
+   Raspberry Pi Imager (pick "Raspberry Pi OS (64-bit)", not Lite, for remote
+   access). In the Imager's settings set hostname, username/password, and WiFi.
+2. Boot the Pi 500. On the desktop, open a terminal (or SSH in) and run:
 
    ```bash
    git clone https://github.com/MucioMan17/muc.io-all-seeing-eye.git
@@ -14,10 +24,14 @@ Two ways to get a Pi that boots straight into the camera console:
    sudo bash system/install.sh
    ```
 
-3. Reboot. The attached display now boots directly into the fullscreen
-   camera console; the engine and web UI start automatically on every boot.
+3. Enable remote access once: `rpi-connect signin`, open the printed link, and
+   log in with your Raspberry Pi ID.
+4. Reboot. The display boots into the fullscreen console automatically, and the
+   Pi is reachable from anywhere at https://connect.raspberrypi.com.
 
-The installer is idempotent — re-run it after `git pull` to upgrade.
+The installer is idempotent — re-run it after `git pull` to upgrade. For a
+headless Pi (no monitor), run the install with `ASE_HEADLESS=1 sudo -E bash
+system/install.sh` so Connect still has a screen to share.
 
 ## Option B — build a real .img with pi-gen
 
