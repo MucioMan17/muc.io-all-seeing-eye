@@ -19,7 +19,12 @@ class DetectConfig:
     # "dnn"    = MobileNet-SSD object detection (run scripts/download-models.sh),
     #            falls back to motion if the model files are missing.
     mode: str = "motion"
-    # Ignore motion blobs smaller than this many pixels (at full frame size).
+    # Motion sensitivity, 0-100. 0 = motion detection off (in dnn mode this
+    # means "only report AI-detected objects, ignore raw motion"); 100 =
+    # most sensitive (catches everything). Adjustable live from the UI.
+    sensitivity: int = 60
+    # Legacy explicit min-area override (kept for back-compat; sensitivity
+    # is the primary knob and derives this when set).
     min_area: int = 600
     # Run the (more expensive) DNN pass every Nth frame; tracker coasts between.
     dnn_interval: int = 3

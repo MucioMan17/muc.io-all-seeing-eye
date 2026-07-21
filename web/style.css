@@ -106,6 +106,31 @@ main { flex: 1; display: flex; min-height: 0; }
 .cam-view { position: relative; background: #000; }
 .cam-canvas { display: block; width: 100%; cursor: crosshair; }
 
+.cam-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--line);
+}
+.cc-label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+.cc-slider {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.cc-value {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--accent);
+  min-width: 30px;
+  text-align: right;
+}
+
 .cam-hint {
   padding: 4px 10px;
   font-size: 11px;

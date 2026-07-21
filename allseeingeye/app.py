@@ -24,7 +24,7 @@ from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__
+from . import __version__, settings
 from .camera import CameraWorker
 from .config import AppConfig
 from .discover import scan_rtsp_hosts
@@ -47,6 +47,11 @@ def build_stamp() -> str:
         return "dev"
 
 
+def state_dir_for(cfg: AppConfig) -> str:
+    """The engine's writable state dir (parent of the recordings dir)."""
+    return os.path.dirname(os.path.abspath(cfg.recording.dir))
+
+
 def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLog) -> FastAPI:
     app = FastAPI(title="All-Seeing Eye", version=__version__)
 
@@ -64,7 +69,7 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
     # update button drops a request flag here; the allseeingeye-update.path
     # systemd unit watches for it and runs the updater with the right
     # privileges, then reports back through update.status.
-    state_dir = os.path.dirname(os.path.abspath(cfg.recording.dir))
+    state_dir = state_dir_for(cfg)
 
     @app.post("/api/update")
     def request_update():
@@ -85,6 +90,17 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
             }
         except (OSError, ValueError, IndexError):
             return {"state": "none", "commit": "-", "ts": 0}
+
+    @app.post("/api/cameras/{cam_id}/sensitivity")
+    def set_sensitivity(cam_id: str, body: dict = Body(...)):
+        worker = worker_or_404(cam_id)
+        try:
+            value = max(0, min(100, int(body.get("value"))))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "value must be an integer 0-100")
+        worker.set_motion_sensitivity(value)
+        settings.set(state_dir, cam_id, "sensitivity", value)
+        return {"ok": True, "sensitivity": value}
 
     @app.get("/api/cameras/scan")
     async def scan_cameras():
@@ -158,6 +174,7 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
                     "online": workers[c.id].online,
                     "mode": "dnn" if workers[c.id].dnn else "motion",
                     "ignore": c.detect.ignore,
+                    "sensitivity": workers[c.id].motion_sensitivity,
                 }
                 for c in cfg.cameras
             ],

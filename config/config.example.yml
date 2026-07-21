@@ -19,8 +19,9 @@ cameras:
     detect:
       mode: motion     # `dnn` = AI object labels (person/car/dog...); the
                        # model downloads itself on first use
-      min_area: 600    # raise to ignore small motion (leaves, insects);
-                       # outdoors 1500-3000 is a good starting range
+      sensitivity: 60  # motion sensitivity 0-100 (0 = raw motion off; in dnn
+                       # mode that leaves only AI objects). Adjust live from
+                       # the UI slider — the value is saved per camera.
       # Mute regions where motion never counts (trees, street, neighbor's
       # yard). Rectangles as fractions of the frame: x/y = top-left corner,
       # w/h = size, all 0.0-1.0. Muted zones show as hatched areas in the UI.

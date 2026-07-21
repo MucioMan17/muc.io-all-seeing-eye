@@ -75,15 +75,37 @@ def in_ignore_zone(cx_norm: float, cy_norm: float, zones: List[dict]) -> bool:
     )
 
 
+def sensitivity_to_params(sensitivity: int) -> tuple:
+    """Map a 0-100 sensitivity dial to (min_area, var_threshold).
+
+    Higher sensitivity -> smaller min_area (catches small motion) and lower
+    variance threshold (reacts to subtler pixel changes). min_area is
+    exponential so the low end still has useful resolution.
+    """
+    s = max(1, min(100, sensitivity))
+    min_area = 150.0 * (8000.0 / 150.0) ** ((100 - s) / 99.0)
+    var_threshold = 16.0 + (100 - s) * 0.44
+    return min_area, var_threshold
+
+
 class MotionDetector:
-    def __init__(self, min_area: int = 600, ignore: List[dict] | None = None):
-        self.min_area = min_area
+    def __init__(self, sensitivity: int = 60, ignore: List[dict] | None = None,
+                 min_area: Optional[float] = None):
         self.ignore = ignore or []
+        derived_area, var_threshold = sensitivity_to_params(sensitivity)
+        # Explicit min_area (legacy/tests) overrides the sensitivity-derived one.
+        self.min_area = derived_area if min_area is None else min_area
         self.bg = cv2.createBackgroundSubtractorMOG2(
-            history=300, varThreshold=32, detectShadows=True
+            history=300, varThreshold=var_threshold, detectShadows=True
         )
         self._frames_seen = 0
         self._zone_mask: Optional[np.ndarray] = None
+
+    def set_sensitivity(self, sensitivity: int) -> None:
+        """Live-update thresholds without recreating the background model."""
+        min_area, var_threshold = sensitivity_to_params(sensitivity)
+        self.min_area = min_area
+        self.bg.setVarThreshold(var_threshold)
 
     def _mask_for(self, w: int, h: int) -> Optional[np.ndarray]:
         """Binary mask (255 = watched, 0 = muted) at processing resolution."""

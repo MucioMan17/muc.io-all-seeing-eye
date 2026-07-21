@@ -88,7 +88,8 @@ class CameraWorker(threading.Thread):
         self._stop = threading.Event()
         self._known_ip: Optional[str] = None
 
-        self.detector = MotionDetector(min_area=cfg.detect.min_area, ignore=cfg.detect.ignore)
+        self.motion_sensitivity = cfg.detect.sensitivity
+        self.detector = MotionDetector(sensitivity=cfg.detect.sensitivity, ignore=cfg.detect.ignore)
         self.dnn: Optional[DnnDetector] = None
         if cfg.detect.mode == "dnn":
             # Load (downloading the model first if needed) off-thread so the
@@ -106,6 +107,13 @@ class CameraWorker(threading.Thread):
         self._tracks_payload: dict = {"ts": 0, "objects": []}
         self.online = False
         self.last_frame_ts = 0.0
+
+    def set_motion_sensitivity(self, value: int) -> None:
+        """Live-adjust motion sensitivity (0-100). 0 disables motion; in dnn
+        mode that leaves only AI object detections."""
+        self.motion_sensitivity = max(0, min(100, int(value)))
+        if self.motion_sensitivity > 0:
+            self.detector.set_sensitivity(self.motion_sensitivity)
 
     def _load_dnn(self, models_dir: str) -> None:
         # Prefer the configured dir; fall back to the writable default
@@ -225,9 +233,14 @@ class CameraWorker(threading.Thread):
             return self.tracker.update(detections, authoritative=True)
         if self.dnn is not None:
             # Between DNN passes, motion keeps tracks alive (and catches new
-            # movers) but must not reshape the DNN's boxes.
-            return self.tracker.update(self.detector.detect(frame), authoritative=False)
-        return self.tracker.update(self.detector.detect(frame))
+            # movers) but must not reshape the DNN's boxes. With motion off
+            # (sensitivity 0), only AI objects are reported.
+            if self.motion_sensitivity > 0:
+                return self.tracker.update(self.detector.detect(frame), authoritative=False)
+            return self.tracker.update([], authoritative=False)
+        if self.motion_sensitivity > 0:
+            return self.tracker.update(self.detector.detect(frame))
+        return self.tracker.update([])  # motion mode, sensitivity 0 = off
 
     def _publish(self, frame: np.ndarray, ts: float, tracks: List[Track]) -> None:
         ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])

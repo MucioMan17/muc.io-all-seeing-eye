@@ -36,6 +36,24 @@ def test_motion_detector_finds_moving_object():
     assert 150 <= d.y <= 250
 
 
+def test_sensitivity_mapping_monotonic():
+    from allseeingeye.detect import sensitivity_to_params
+    # Higher sensitivity -> smaller min_area and lower variance threshold.
+    a100, v100 = sensitivity_to_params(100)
+    a50, v50 = sensitivity_to_params(50)
+    a1, v1 = sensitivity_to_params(1)
+    assert a100 < a50 < a1
+    assert v100 < v50 < v1
+    assert a100 < 200 and a1 > 5000  # sane bounds
+
+
+def test_set_sensitivity_updates_min_area():
+    md = MotionDetector(sensitivity=100)
+    high = md.min_area
+    md.set_sensitivity(10)
+    assert md.min_area > high
+
+
 def test_ignore_zone_mutes_motion():
     # Same moving block as above, but the zone covers it -> no detections.
     zone = [{"x": 0.3, "y": 0.3, "w": 0.4, "h": 0.4}]

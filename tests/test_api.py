@@ -154,6 +154,27 @@ def test_add_camera_status_default(client):
     assert client.get("/api/cameras/add-status").json()["state"] == "none"
 
 
+def test_sensitivity_set_and_reflected_in_state(client, tmp_path):
+    import os
+    ov = os.path.join(os.path.dirname(str(tmp_path)), "overrides.json")
+    try:
+        r = client.post("/api/cameras/demo/sensitivity", json={"value": 25})
+        assert r.json() == {"ok": True, "sensitivity": 25}
+        cam = client.get("/api/state").json()["cameras"][0]
+        assert cam["sensitivity"] == 25
+        # persisted to the overrides file
+        assert os.path.exists(ov)
+    finally:
+        if os.path.exists(ov):
+            os.remove(ov)
+
+
+def test_sensitivity_clamped_and_validated(client):
+    assert client.post("/api/cameras/demo/sensitivity", json={"value": 999}).json()["sensitivity"] == 100
+    assert client.post("/api/cameras/demo/sensitivity", json={"value": "x"}).status_code == 400
+    assert client.post("/api/cameras/nope/sensitivity", json={"value": 50}).status_code == 404
+
+
 def test_media_path_confined(client):
     assert client.get("/api/media/../../etc/passwd").status_code == 404
 

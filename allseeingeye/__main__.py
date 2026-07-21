@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 
 import uvicorn
 
-from .app import create_app
+from . import settings
+from .app import create_app, state_dir_for
 from .camera import CameraWorker
 from .config import load_config
 from .recorder import EventLog, start_retention_thread
@@ -28,9 +30,14 @@ def main() -> None:
     events = EventLog(cfg.recording.dir)
     start_retention_thread(events, cfg.recording)
 
+    state_dir = state_dir_for(cfg)
     workers = {}
     for cam in cfg.cameras:
         worker = CameraWorker(cam, cfg.recording, events, cfg.models_dir)
+        # Apply any saved per-camera overrides (e.g. motion sensitivity).
+        saved = settings.get(state_dir, cam.id, "sensitivity", None)
+        if saved is not None:
+            worker.set_motion_sensitivity(saved)
         worker.start()
         workers[cam.id] = worker
 

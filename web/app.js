@@ -51,8 +51,40 @@ class CameraView {
     this.img = new Image();
     this.img.src = `/api/stream/${this.id}?t=${Date.now()}`;
 
+    // Motion sensitivity slider (per camera, persisted server-side).
+    this.slider = this.root.querySelector(".cc-slider");
+    this.sliderValue = this.root.querySelector(".cc-value");
+    this.setSensitivityUI(typeof info.sensitivity === "number" ? info.sensitivity : 60);
+    this.slider.addEventListener("input", () => {
+      this.sliderValue.textContent = this.slider.value === "0" ? "OFF" : this.slider.value;
+    });
+    this.slider.addEventListener("change", () => {
+      this.postSensitivity(parseInt(this.slider.value, 10));
+    });
+
     this.canvas.addEventListener("click", (e) => this.onClick(e));
     this.connectWS();
+  }
+
+  setSensitivityUI(v) {
+    this.slider.value = v;
+    this.sliderValue.textContent = v === 0 ? "OFF" : String(v);
+  }
+
+  async postSensitivity(v) {
+    this.setSensitivityUI(v);
+    try {
+      await fetch(`/api/cameras/${encodeURIComponent(this.id)}/sensitivity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: v }),
+      });
+    } catch {}
+  }
+
+  nudgeSensitivity(delta) {
+    const v = Math.max(0, Math.min(100, parseInt(this.slider.value, 10) + delta));
+    this.postSensitivity(v);
   }
 
   connectWS() {
@@ -837,6 +869,10 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
   } else if (key === "Enter") {
     cam?.toggleLockSelected();
+  } else if (key === "[") {
+    cam?.nudgeSensitivity(-10);
+  } else if (key === "]") {
+    cam?.nudgeSensitivity(10);
   } else if (low === "f") {
     toggleSolo();
   } else if (low === "e") {
