@@ -13,8 +13,8 @@
       <h1>MUC.IO ALL SEEING EYE</h1>
     </div>
     <nav id="sites"></nav>
-    <button id="addcam-btn" title="add a camera">+ CAMERA</button>
-    <button id="update-btn" title="pull the latest version and reinstall">UPDATE</button>
+    <button id="addcam-btn" class="nav" tabindex="0" title="add a camera">+ CAMERA</button>
+    <button id="update-btn" class="nav" tabindex="0" title="pull the latest version and reinstall">UPDATE</button>
     <div id="clock"></div>
   </header>
 
@@ -80,20 +80,20 @@
       <div class="cam-header">
         <span class="cam-status"></span>
       </div>
-      <div class="cam-view">
+      <div class="cam-view nav" tabindex="0">
         <canvas class="cam-canvas"></canvas>
       </div>
       <div class="cam-controls">
         <span class="cc-label">MOTION</span>
-        <input class="cc-slider" type="range" min="0" max="100" step="5" value="60"
+        <input class="cc-slider nav" type="range" min="0" max="100" step="5" value="60"
                title="motion sensitivity — 0 turns raw motion off">
         <span class="cc-value">60</span>
       </div>
       <div class="cam-hint">
-        <b>WASD</b>/arrows move &middot; <b>1-9</b> camera &middot; <b>Tab</b> select object &middot;
-        <b>Enter</b> lock/OK &middot; <b>[ ]</b> motion &middot; <b>F</b> fullscreen &middot;
-        <b>E</b> events &middot; <b>X</b> delete &middot; <b>C</b> clear all &middot;
-        <b>U</b> update &middot; <b>Esc</b> back
+        <b>WASD</b>/arrows move anywhere &middot; <b>Enter</b> select/OK &middot;
+        <b>Tab</b> cycle objects &middot; slider: &larr;&rarr; adjust &middot;
+        <b>1-9</b> camera &middot; <b>F</b> fullscreen &middot; <b>E</b> events &middot;
+        <b>X</b> delete &middot; <b>C</b> clear &middot; <b>U</b> update &middot; <b>Esc</b> back
       </div>
     </div>
   </template>

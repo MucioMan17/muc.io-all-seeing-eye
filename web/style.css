@@ -58,8 +58,8 @@ body {
   padding: 4px 12px;
   cursor: pointer;
 }
-#update-btn:hover, #update-btn.focused, #sites a.focused,
-#addcam-btn:hover, #addcam-btn.focused {
+#update-btn:hover, #update-btn:focus, #sites a:focus,
+#addcam-btn:hover, #addcam-btn:focus {
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -90,8 +90,12 @@ main { flex: 1; display: flex; min-height: 0; }
   display: flex;
   flex-direction: column;
 }
-.camera.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-#grid.solo .camera:not(.active) { display: none; }
+/* One consistent focus ring for the whole keyboard-navigable UI. */
+.nav { outline: none; }
+.cam-view.nav:focus { outline: none; }
+/* The whole tile lights up when its canvas or its slider holds the cursor. */
+.camera:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+#grid.solo .camera:not(.solo-cam) { display: none; }
 
 .cam-header {
   display: flex;
@@ -123,6 +127,7 @@ main { flex: 1; display: flex; min-height: 0; }
   accent-color: var(--accent);
   cursor: pointer;
 }
+.cc-slider.nav:focus { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .cc-value {
   font-family: monospace;
   font-size: 12px;
@@ -168,8 +173,8 @@ main { flex: 1; display: flex; min-height: 0; }
   cursor: pointer;
 }
 .event:hover { background: var(--panel2); }
-.event.selected { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
-#sidebar.focused h2 { color: var(--accent); border-bottom-color: var(--accent); }
+.event.nav:focus { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); outline: none; }
+#sidebar:focus-within h2 { color: var(--accent); border-bottom-color: var(--accent); }
 
 .event { position: relative; }
 .ev-del {
@@ -284,6 +289,9 @@ main { flex: 1; display: flex; min-height: 0; }
 }
 .ac-actions .primary { border-color: var(--accent); color: var(--accent); }
 .ac-actions button:disabled { opacity: 0.4; cursor: default; }
+#addcam-body button:focus, #ac-scan:focus {
+  outline: none; border-color: var(--accent); color: var(--accent);
+}
 #addcam-close {
   position: absolute; top: 6px; right: 10px;
   background: none; border: none; color: var(--text);
