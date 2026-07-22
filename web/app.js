@@ -219,18 +219,27 @@ class CameraView {
     this.lockLastSeen = performance.now();
   }
 
-  // Zoom source rectangle for an object: its box padded out, clamped to frame.
-  zoomRect(o, padFactor) {
+  // Source crop for a zoom inset. Matches the inset's aspect ratio (no
+  // distortion) and always magnifies — the zoom is clamped to
+  // [minZoom, maxZoom], so a big, close object shows a zoomed-in detail of
+  // its centre instead of being shrunk to fit (the old ×0.2 bug), while a
+  // small, distant object is magnified a lot.
+  zoomRect(o, iw, ih, minZoom, maxZoom) {
     const [fw, fh] = this.frameSize();
+    const aspect = iw / ih;
     const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
-    let w = Math.max(o.w * padFactor, 64);
-    let h = Math.max(o.h * padFactor, 48);
-    // Keep the crop inside the frame.
-    w = Math.min(w, fw); h = Math.min(h, fh);
-    let x = cx - w / 2, y = cy - h / 2;
-    x = Math.max(0, Math.min(x, fw - w));
-    y = Math.max(0, Math.min(y, fh - h));
-    return [x, y, w, h];
+    const pad = 1.15; // a little breathing room around the object
+    const needW = Math.max(o.w, o.h * aspect) * pad;
+    let zoom = Math.max(minZoom, Math.min(maxZoom, iw / needW));
+    let sw = iw / zoom;
+    let sh = sw / aspect;
+    // Never crop larger than the frame.
+    if (sw > fw) { sw = fw; sh = sw / aspect; }
+    if (sh > fh) { sh = fh; sw = sh * aspect; }
+    let sx = cx - sw / 2, sy = cy - sh / 2;
+    sx = Math.max(0, Math.min(sx, fw - sw));
+    sy = Math.max(0, Math.min(sy, fh - sh));
+    return { sx, sy, sw, sh, zoom: iw / sw };
   }
 
   draw() {
@@ -358,7 +367,7 @@ class CameraView {
     const iy = margin + slot * (ih + margin);
     if (iy + ih > fh) return; // out of vertical space
 
-    this.drawZoomBox(o, ix, iy, iw, ih, 2.2, false);
+    this.drawZoomBox(o, ix, iy, iw, ih, 2.0, 8, false);
   }
 
   drawZoomPanel(o, big) {
@@ -370,15 +379,15 @@ class CameraView {
     // Put the big panel in the corner farthest from the object.
     const ix = cx > fw / 2 ? margin : fw - iw - margin;
     const iy = fh - ih - margin;
-    this.drawZoomBox(o, ix, iy, iw, ih, 1.6, true);
+    this.drawZoomBox(o, ix, iy, iw, ih, 1.5, 6, true);
   }
 
-  drawZoomBox(o, ix, iy, iw, ih, padFactor, isLock) {
+  drawZoomBox(o, ix, iy, iw, ih, minZoom, maxZoom, isLock) {
     const ctx = this.ctx;
     const [fw] = this.frameSize();
     const px = Math.max(2, Math.round(fw / 640));
     const color = isLock ? LOCK_COLOR : (LABEL_COLORS[o.label] || "#35e0a1");
-    const [sx, sy, sw, sh] = this.zoomRect(o, padFactor);
+    const { sx, sy, sw, sh, zoom } = this.zoomRect(o, iw, ih, minZoom, maxZoom);
 
     // Tracer line: object center -> inset center.
     const ocx = o.x + o.w / 2, ocy = o.y + o.h / 2;
@@ -414,7 +423,7 @@ class CameraView {
     ctx.font = `${fs}px monospace`;
     const tag = isLock
       ? `LOCKED #${o.id} ${o.label.toUpperCase()}`
-      : `#${o.id} ×${(iw / sw).toFixed(1)}`;
+      : `#${o.id} ×${zoom.toFixed(1)}`;
     ctx.fillStyle = "rgba(0,0,0,0.65)";
     ctx.fillRect(ix, iy + ih - fs - 6, ctx.measureText(tag).width + 10, fs + 6);
     ctx.fillStyle = color;
