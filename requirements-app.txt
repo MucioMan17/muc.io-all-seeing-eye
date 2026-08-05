@@ -1,0 +1,12 @@
+# Full dependencies to run the native desktop app WITH face recognition,
+# on a dev/desktop machine (Windows or macOS). The Pi image installs OpenCV
+# from apt instead; this file is for running it yourself.
+opencv-python
+numpy
+pillow
+pyyaml
+insightface
+onnxruntime
+faiss-cpu
+fastapi
+uvicorn[standard]
