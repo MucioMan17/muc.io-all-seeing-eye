@@ -134,10 +134,10 @@ class Console:
                       activebackground=LINE, font=("Menlo", 11)).pack(side="left")
             tk.Button(fr, text="✕", command=lambda c=cid: self._remove_camera(c),
                       relief="flat", bg=PANEL, fg="#ff6b6b", font=("Menlo", 10),
-                      cursor="pointinghand").pack(side="left")
+                      cursor="hand2").pack(side="left")
         tk.Button(self.cam_btn_row, text="＋ Add camera", command=self._open_add_camera_dialog,
                   relief="flat", bg=PANEL, fg=GREEN, font=("Menlo", 11),
-                  cursor="pointinghand").pack(side="left", padx=(6, 0))
+                  cursor="hand2").pack(side="left", padx=(6, 0))
 
     # ---------- camera management ----------
     def _next_cam_id(self):
@@ -251,7 +251,7 @@ class Console:
         btns.pack(fill="x", padx=16, pady=14, side="bottom")
         tk.Button(btns, text="Add camera", command=submit, bg=GREEN, fg="#04120d",
                   relief="flat", font=("Menlo", 12, "bold"),
-                  cursor="pointinghand").pack(side="right")
+                  cursor="hand2").pack(side="right")
         tk.Button(btns, text="Cancel", command=win.destroy, bg=PANEL, fg=TEXT,
                   relief="flat", font=("Menlo", 12)).pack(side="right", padx=8)
 
@@ -370,10 +370,10 @@ class Console:
             btns.pack(side="right")
             tk.Button(btns, text="✎", command=lambda i=ident: self._rename(i),
                       relief="flat", bg=PANEL, fg=GREEN, font=("Menlo", 11),
-                      cursor="pointinghand").pack(side="left")
+                      cursor="hand2").pack(side="left")
             tk.Button(btns, text="✕", command=lambda i=ident: self._delete(i),
                       relief="flat", bg=PANEL, fg="#ff6b6b", font=("Menlo", 11),
-                      cursor="pointinghand").pack(side="left")
+                      cursor="hand2").pack(side="left")
 
     def _refresh_sightings(self):
         for c in self.sight_box.winfo_children():
