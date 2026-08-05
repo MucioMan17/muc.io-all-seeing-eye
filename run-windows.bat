@@ -14,6 +14,12 @@ if not exist ".venv\Scripts\python.exe" (
     call ".venv\Scripts\activate.bat"
 )
 
-echo Starting All-Seeing Eye...
-python desktop_main.py
+if not exist "run" mkdir run
+echo.
+echo Starting All-Seeing Eye...  (the window will open shortly)
+echo Camera/decoder log messages go to run\app.log - this console stays clean.
+echo Close the app window to quit.
+python desktop_main.py > run\app.log 2>&1
+echo.
+echo App closed.
 pause
