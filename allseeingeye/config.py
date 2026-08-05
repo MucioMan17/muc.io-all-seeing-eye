@@ -15,10 +15,13 @@ import yaml
 
 @dataclass
 class DetectConfig:
+    # "yolo"   = YOLO object detection (person / vehicle / animal) via Ultralytics.
+    #            The default; needs `pip install ultralytics`.
+    # "dnn"    = MobileNet-SSD (legacy; needs OpenCV 4.x's Caffe importer).
     # "motion" = background-subtraction motion detection (no model needed).
-    # "dnn"    = MobileNet-SSD object detection (run scripts/download-models.sh),
-    #            falls back to motion if the model files are missing.
-    mode: str = "motion"
+    mode: str = "yolo"
+    # YOLO weights (auto-download on first use). yolo11n=fast, yolo11s/m=more accurate.
+    yolo_model: str = "yolo11n.pt"
     # Motion sensitivity, 0-100. 0 = motion detection off (in dnn mode this
     # means "only report AI-detected objects, ignore raw motion"); 100 =
     # most sensitive (catches everything). Adjustable live from the UI.

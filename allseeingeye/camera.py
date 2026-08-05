@@ -98,8 +98,12 @@ class CameraWorker(threading.Thread):
         self._known_ip: Optional[str] = None
 
         self.motion_sensitivity = cfg.detect.sensitivity
+        # YOLO replaces raw motion detection entirely — suppress the noisy
+        # motion boxes even while the model is still loading.
+        if cfg.detect.mode == "yolo":
+            self.motion_sensitivity = 0
         self.detector = MotionDetector(sensitivity=cfg.detect.sensitivity, ignore=cfg.detect.ignore)
-        self.dnn: Optional[DnnDetector] = None
+        self.dnn = None  # holds a detector exposing .detect(frame) (DNN or YOLO)
         if cfg.detect.mode == "dnn":
             # Load (downloading the model first if needed) off-thread so the
             # video pipeline starts immediately; motion detection covers the
@@ -107,6 +111,10 @@ class CameraWorker(threading.Thread):
             threading.Thread(
                 target=self._load_dnn, args=(models_dir,),
                 name=f"dnn-load-{cfg.id}", daemon=True,
+            ).start()
+        elif cfg.detect.mode == "yolo":
+            threading.Thread(
+                target=self._load_yolo, name=f"yolo-load-{cfg.id}", daemon=True,
             ).start()
 
         # Published state (guarded by _cond).
@@ -124,6 +132,21 @@ class CameraWorker(threading.Thread):
         self.motion_sensitivity = max(0, min(100, int(value)))
         if self.motion_sensitivity > 0:
             self.detector.set_sensitivity(self.motion_sensitivity)
+
+    def _load_yolo(self) -> None:
+        """Load the YOLO object detector (person / vehicle / animal). Runs
+        off-thread; the video starts immediately and self.dnn is swapped in
+        when the model is ready."""
+        try:
+            from .detect import YoloDetector
+            self.dnn = YoloDetector(self.cfg.detect.yolo_model, self.cfg.detect.confidence)
+            self.motion_sensitivity = 0  # YOLO replaces motion
+            log.info("camera %s: YOLO object detection enabled (%s)",
+                     self.cfg.id, self.cfg.detect.yolo_model)
+        except Exception as e:
+            log.warning("camera %s: YOLO unavailable (%s) — run "
+                        "'pip install ultralytics'; object detection off",
+                        self.cfg.id, e)
 
     def _load_dnn(self, models_dir: str) -> None:
         # Prefer the configured dir; fall back to the writable default

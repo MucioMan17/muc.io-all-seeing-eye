@@ -249,3 +249,41 @@ class DnnDetector:
                 continue
             detections.append(Detection(x=x1, y=y1, w=x2 - x1, h=y2 - y1, label=label, conf=conf))
         return detections
+
+
+class YoloDetector:
+    """Object detection with Ultralytics YOLO — people, vehicles, and animals.
+
+    Model weights auto-download on first use. Runs on the GPU automatically when
+    a CUDA build of PyTorch is installed, otherwise on CPU.
+    """
+
+    # COCO classes we surface (person / vehicle / animal). Everything else ignored.
+    KEEP = {
+        "person",
+        "bicycle", "car", "motorcycle", "bus", "train", "truck", "boat",
+        "bird", "cat", "dog", "horse", "sheep", "cow",
+        "elephant", "bear", "zebra", "giraffe",
+    }
+
+    def __init__(self, model: str = "yolo11n.pt", confidence: float = 0.4):
+        from ultralytics import YOLO  # heavy import, only when this mode is used
+        self.model = YOLO(model)
+        self.confidence = confidence
+        self.names = self.model.names
+
+    def detect(self, frame: np.ndarray) -> List[Detection]:
+        results = self.model.predict(frame, conf=self.confidence, verbose=False)
+        dets: List[Detection] = []
+        if not results:
+            return dets
+        for box in results[0].boxes:
+            label = self.names[int(box.cls)]
+            if label not in self.KEEP:
+                continue
+            x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
+            if x2 <= x1 or y2 <= y1:
+                continue
+            dets.append(Detection(x=int(x1), y=int(y1), w=int(x2 - x1),
+                                  h=int(y2 - y1), label=label, conf=float(box.conf)))
+        return dets

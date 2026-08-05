@@ -27,9 +27,20 @@ and logged locally.
 
 - **Your camera password** is stored only in `config/local.yml` on your machine,
   which is git-ignored — it never gets pushed.
-- **GPU (optional):** face detection runs on CPU by default and is fine. To use
-  your NVIDIA GPU later, swap `onnxruntime` for `onnxruntime-gpu` in
-  `requirements-app.txt` and reinstall.
+- **Object detection (person / vehicle / animal):** on by default via YOLO
+  (Ultralytics). The model (`yolo11n.pt`) auto-downloads on first run. It draws
+  labeled boxes for people, cars/trucks/buses/bikes, and animals — separate from
+  the named face boxes.
+- **GPU (strongly recommended for YOLO):** installing `requirements-app.txt` gets
+  a **CPU** build of PyTorch, so YOLO will be choppy. To use your NVIDIA GPU
+  (much smoother), install the CUDA build of torch into the venv:
+  ```
+  .venv\Scripts\activate
+  pip uninstall -y torch torchvision
+  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+  ```
+  YOLO then uses the GPU automatically. (Face detection still uses `onnxruntime`
+  on CPU, which is fine; swap to `onnxruntime-gpu` later if you want.)
 - **Recorded-clip playback (optional):** install `ffmpeg` and put it on PATH.
 - The data the app writes — identities and a `sightings.jsonl` log — lives under
   `run/faces/`. That's what the voice assistant will read to answer questions

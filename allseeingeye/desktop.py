@@ -265,14 +265,17 @@ class Console:
 
     # ---------- video ----------
     def _draw_overlays(self, frame, tracks, faces):
+        OBJECT = (40, 190, 255)  # amber box for detected objects (BGR)
         for t in tracks:
+            if t["label"] == "motion":
+                continue  # motion detection removed — only labeled objects show
             x, y, w, h = t["x"], t["y"], t["w"], t["h"]
-            cv2.rectangle(frame, (x, y), (x + w, y + h), TRACK, 1, cv2.LINE_AA)
-            cv2.putText(frame, f"#{t['id']} {t['label']}", (x, max(12, y - 6)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, TRACK, 1, cv2.LINE_AA)
-            trail = t.get("trail") or []
-            for i in range(1, len(trail)):
-                cv2.line(frame, tuple(trail[i - 1]), tuple(trail[i]), TRACK, 1, cv2.LINE_AA)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), OBJECT, 2, cv2.LINE_AA)
+            tag = t["label"]            # person / car / dog / ...
+            cv2.rectangle(frame, (x, max(0, y - 20)),
+                          (x + max(70, len(tag) * 10), y), OBJECT, -1)
+            cv2.putText(frame, tag, (x + 4, max(12, y - 5)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (10, 20, 10), 1, cv2.LINE_AA)
         for f in faces:
             x, y, w, h = f["bbox"]
             color = KNOWN if f["status"] == "known" else UNKNOWN
