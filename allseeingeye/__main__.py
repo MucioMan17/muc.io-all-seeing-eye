@@ -12,6 +12,7 @@ from . import settings
 from .app import create_app, state_dir_for
 from .camera import CameraWorker
 from .config import load_config
+from .faceworker import FaceRecognizer, FaceWorker
 from .recorder import EventLog, start_retention_thread
 
 
@@ -41,12 +42,25 @@ def main() -> None:
         worker.start()
         workers[cam.id] = worker
 
-    app = create_app(cfg, workers, events)
+    # Face recognition (own thread per camera; off the capture path).
+    face_manager = None
+    face_workers = {}
+    if cfg.faces.enabled:
+        faces_dir = cfg.faces.dir or os.path.join(state_dir, "faces")
+        face_manager = FaceRecognizer(faces_dir, cfg.faces)
+        for cam_id, worker in workers.items():
+            fw = FaceWorker(worker, face_manager, cfg.faces)
+            fw.start()
+            face_workers[cam_id] = fw
+
+    app = create_app(cfg, workers, events, face_manager, face_workers)
     try:
         uvicorn.run(app, host=cfg.server.host, port=cfg.server.port, log_level="warning")
     finally:
         for worker in workers.values():
             worker.stop()
+        for fw in face_workers.values():
+            fw.stop()
 
 
 if __name__ == "__main__":

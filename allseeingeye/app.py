@@ -52,14 +52,21 @@ def state_dir_for(cfg: AppConfig) -> str:
     return os.path.dirname(os.path.abspath(cfg.recording.dir))
 
 
-def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLog) -> FastAPI:
+def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLog,
+               face_manager=None, face_workers=None) -> FastAPI:
     app = FastAPI(title="All-Seeing Eye", version=__version__)
+    face_workers = face_workers or {}
 
     def worker_or_404(cam_id: str) -> CameraWorker:
         worker = workers.get(cam_id)
         if worker is None:
             raise HTTPException(404, f"unknown camera {cam_id!r}")
         return worker
+
+    def faces_or_404():
+        if face_manager is None:
+            raise HTTPException(404, "face recognition is disabled")
+        return face_manager
 
     @app.get("/api/health")
     def health():
@@ -210,6 +217,7 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
             "site": cfg.site_name,
             "version": __version__,
             "build": build_stamp(),
+            "faces_enabled": face_manager is not None,
             "cameras": [
                 {
                     "id": c.id,
@@ -284,6 +292,67 @@ def create_app(cfg: AppConfig, workers: Dict[str, CameraWorker], events: EventLo
     @app.delete("/api/events")
     def clear_events():
         return {"deleted": events.clear()}
+
+    # ---- faces ----
+
+    @app.get("/api/faces")
+    def list_faces(day: str | None = None):
+        """Known identities with today's (or `day`'s) sighting counts."""
+        fm = faces_or_404()
+        return {"faces": fm.faces_with_counts(day), "enabled": True}
+
+    @app.get("/api/faces/{identity_id}/thumb")
+    def face_thumb(identity_id: str):
+        fm = faces_or_404()
+        ident = fm.store.by_id(identity_id)
+        if not ident or not ident.get("thumb"):
+            raise HTTPException(404, "no thumbnail")
+        root = os.path.realpath(fm.store.thumbs_dir)
+        full = os.path.realpath(os.path.join(root, ident["thumb"]))
+        if not full.startswith(root + os.sep) or not os.path.isfile(full):
+            raise HTTPException(404, "not found")
+        return FileResponse(full, media_type="image/jpeg")
+
+    @app.patch("/api/faces/{identity_id}")
+    def rename_face(identity_id: str, body: dict = Body(...)):
+        fm = faces_or_404()
+        name = (body.get("name") or "").strip()
+        if not name:
+            raise HTTPException(400, "name required")
+        if not fm.store.rename(identity_id, name):
+            raise HTTPException(404, f"unknown identity {identity_id!r}")
+        return {"ok": True, "id": identity_id, "name": name}
+
+    @app.delete("/api/faces/{identity_id}")
+    def delete_face(identity_id: str):
+        fm = faces_or_404()
+        if not fm.store.remove(identity_id):
+            raise HTTPException(404, f"unknown identity {identity_id!r}")
+        return {"deleted": True, "id": identity_id}
+
+    @app.get("/api/sightings")
+    def list_sightings(limit: int = 100, identity: str | None = None,
+                       day: str | None = None, status: str | None = None):
+        fm = faces_or_404()
+        return {"sightings": fm.log.list(min(limit, 1000), identity, day, status)}
+
+    @app.get("/api/sightings/summary")
+    def sightings_summary(day: str | None = None):
+        fm = faces_or_404()
+        return {"summary": fm.log.summary(day)}
+
+    @app.get("/api/alerts")
+    def face_alerts(limit: int = 20):
+        fm = faces_or_404()
+        return {"alerts": fm.alerts(limit)}
+
+    @app.get("/api/faces-live/{cam_id}")
+    def faces_live(cam_id: str):
+        """Current recognized faces (boxes + names) for overlaying on a feed."""
+        fw = face_workers.get(cam_id)
+        if fw is None:
+            return {"ts": 0, "camera": cam_id, "faces": []}
+        return fw.faces_payload()
 
     @app.get("/api/media/{path:path}")
     def media(path: str):

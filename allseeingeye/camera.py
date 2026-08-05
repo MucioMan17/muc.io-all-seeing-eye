@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import math
+import sys
 import threading
 import time
 from typing import List, Optional
@@ -35,6 +36,14 @@ log = logging.getLogger(__name__)
 
 JPEG_QUALITY = 80
 RECONNECT_BACKOFF_MAX = 30.0
+
+
+def _mask(src):
+    """Hide credentials in an rtsp URL for logging (rtsp://user:pass@ -> rtsp://***@)."""
+    if isinstance(src, str) and "://" in src and "@" in src:
+        import re
+        return re.sub(r"://[^/@]*@", "://***@", src)
+    return src
 
 
 class SyntheticSource:
@@ -103,6 +112,7 @@ class CameraWorker(threading.Thread):
         # Published state (guarded by _cond).
         self._cond = threading.Condition()
         self._jpeg: Optional[bytes] = None
+        self._last_raw: Optional[np.ndarray] = None
         self._frame_seq = 0
         self._tracks_payload: dict = {"ts": 0, "objects": []}
         self.online = False
@@ -165,15 +175,28 @@ class CameraWorker(threading.Thread):
             if self._known_ip:
                 src = substitute_host(src, self._known_ip)
         if isinstance(src, int):
-            # USB webcam: force the V4L2 backend and MJPEG. Most webcams only
-            # deliver 720p+ as MJPEG — raw YUYV at that size exceeds USB
-            # bandwidth and fails with a v4l2 "Internal data stream error".
-            # FOURCC must be set before the resolution.
-            cap = cv2.VideoCapture(src, cv2.CAP_V4L2)
-            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
-            cap.set(cv2.CAP_PROP_FPS, self.cfg.fps)
+            if sys.platform == "darwin":
+                # macOS: AVFoundation is the working backend (V4L2 is Linux-only).
+                cap = cv2.VideoCapture(src)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
+                cap.set(cv2.CAP_PROP_FPS, self.cfg.fps)
+            elif sys.platform == "win32":
+                # Windows: DirectShow backend for USB webcams.
+                cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
+                cap.set(cv2.CAP_PROP_FPS, self.cfg.fps)
+            else:
+                # Linux USB webcam: force V4L2 + MJPEG. Most webcams only
+                # deliver 720p+ as MJPEG — raw YUYV at that size exceeds USB
+                # bandwidth and fails with a v4l2 "Internal data stream error".
+                # FOURCC must be set before the resolution.
+                cap = cv2.VideoCapture(src, cv2.CAP_V4L2)
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
+                cap.set(cv2.CAP_PROP_FPS, self.cfg.fps)
         else:
             cap = cv2.VideoCapture(src)
         # Keep RTSP latency down: don't buffer stale frames.
@@ -189,13 +212,13 @@ class CameraWorker(threading.Thread):
             if not cap.isOpened():
                 self.online = False
                 log.warning("camera %s: cannot open source %r, retrying in %.0fs",
-                            self.cfg.id, self.cfg.source, backoff)
+                            self.cfg.id, _mask(self.cfg.source), backoff)
                 cap.release()
                 self._stop.wait(backoff)
                 backoff = min(backoff * 2, RECONNECT_BACKOFF_MAX)
                 continue
 
-            log.info("camera %s: source %r opened", self.cfg.id, self.cfg.source)
+            log.info("camera %s: source %r opened", self.cfg.id, _mask(self.cfg.source))
             backoff = 1.0
             self.online = True
             is_synthetic = isinstance(cap, SyntheticSource)
@@ -271,6 +294,7 @@ class CameraWorker(threading.Thread):
             if ok:
                 self._jpeg = jpeg.tobytes()
                 self._frame_seq += 1
+            self._last_raw = frame
             self._tracks_payload = payload
             self.last_frame_ts = ts
             self._cond.notify_all()
@@ -286,6 +310,11 @@ class CameraWorker(threading.Thread):
     def snapshot_jpeg(self) -> Optional[bytes]:
         with self._cond:
             return self._jpeg
+
+    def latest_raw(self) -> Optional[np.ndarray]:
+        """Most recent decoded BGR frame (for the face-recognition thread)."""
+        with self._cond:
+            return self._last_raw
 
     def tracks_payload(self) -> dict:
         with self._cond:

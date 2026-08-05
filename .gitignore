@@ -7,3 +7,6 @@ models/*.caffemodel
 models/*.prototxt
 .pytest_cache/
 *.egg-info/
+config/local.yml
+All-Seeing Eye.app/
+.DS_Store

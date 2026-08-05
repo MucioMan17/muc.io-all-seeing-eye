@@ -76,6 +76,24 @@ class RecordingConfig:
 
 
 @dataclass
+class FaceConfig:
+    # Face recognition: detect faces, match a local identity store, auto-enroll
+    # unknowns, log sightings. Runs on its own thread per camera.
+    enabled: bool = True
+    # Seconds between recognition passes per camera (throttle for live speed).
+    interval: float = 0.5
+    # Cosine similarity to count a face as the same known person.
+    threshold: float = 0.42
+    # Don't log the same identity again within this many seconds (dedupe a
+    # person who lingers in view).
+    cooldown: float = 15.0
+    # Auto-enroll unknown faces as new identities so repeat visits are counted.
+    auto_enroll: bool = True
+    # Storage dir for identities + sightings ("" = <state_dir>/faces).
+    dir: str = ""
+
+
+@dataclass
 class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 8080
@@ -102,6 +120,7 @@ class AppConfig:
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     remote_sites: List[SiteLink] = field(default_factory=list)
     models_dir: str = DEFAULT_MODELS_DIR
+    faces: FaceConfig = field(default_factory=FaceConfig)
 
 
 def _build(cls, data: dict) -> Any:
@@ -123,6 +142,8 @@ def load_config(path: Optional[str]) -> AppConfig:
         cfg.server = _build(ServerConfig, data["server"])
     if "recording" in data:
         cfg.recording = _build(RecordingConfig, data["recording"])
+    if "faces" in data:
+        cfg.faces = _build(FaceConfig, data["faces"])
     for cam in data.get("cameras", []):
         cam = dict(cam)
         detect = cam.pop("detect", {})
