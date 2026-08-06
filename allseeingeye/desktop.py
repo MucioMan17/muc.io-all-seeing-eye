@@ -14,7 +14,7 @@ import argparse
 import os
 import time
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import filedialog, messagebox, simpledialog
 from urllib.parse import quote
 
 import cv2
@@ -22,6 +22,7 @@ import numpy as np
 import yaml
 from PIL import Image, ImageTk
 
+from . import recognizer
 from .camera import CameraWorker
 from .config import CameraConfig, load_config
 from .faceworker import FaceRecognizer, FaceWorker
@@ -56,7 +57,9 @@ class Console:
         self.fm = None
         self.face_workers = {}
         self.cam_ids = []
-        self.active = None
+        self.view = "grid"          # "grid" = all cameras, or a cam_id for single view
+        self.video_labels = {}      # cam_id -> the Label showing that feed
+        self._cell_w = VIDEO_W
         self._thumb_cache = {}
 
         root.title("All-Seeing Eye")
@@ -72,7 +75,8 @@ class Console:
         """Build and start the engine once the window is up."""
         self.events, self.workers, self.fm, self.face_workers = build_engine(self.cfg)
         self.cam_ids = list(self.workers.keys())
-        self.active = self.cam_ids[0] if self.cam_ids else None
+        self.view = "grid"
+        self._rebuild_view()
         self._build_cam_buttons()
         self._tick_video()
         self._tick_panel()
@@ -92,13 +96,11 @@ class Console:
         body.pack(fill="both", expand=True, padx=16, pady=8)
 
         left = tk.Frame(body, bg=BG)
-        stage = tk.Frame(left, bg="#000", width=VIDEO_W, height=int(VIDEO_W * 9 / 16),
-                         highlightthickness=1, highlightbackground=LINE)
-        stage.pack()
-        stage.pack_propagate(False)
-        self.video = tk.Label(stage, bg="#000", text="starting engine…",
-                              fg=DIM, font=("Menlo", 13), compound="center")
-        self.video.pack(fill="both", expand=True)
+        # Video area — filled with a grid (or single feed) by _rebuild_view().
+        self.stage = tk.Frame(left, bg=BG)
+        self.stage.pack()
+        tk.Label(self.stage, bg="#000", text="starting engine…", fg=DIM,
+                 width=92, height=22, font=("Menlo", 13)).pack()
         self.cam_btn_row = tk.Frame(left, bg=BG)
         self.cam_btn_row.pack(fill="x", pady=(8, 0))
 
@@ -112,7 +114,10 @@ class Console:
 
         self._section(right, "◆ FACES — seen today")
         self.faces_box = tk.Frame(right, bg=PANEL)
-        self.faces_box.pack(fill="both", expand=True, pady=(0, 10))
+        self.faces_box.pack(fill="both", expand=True, pady=(0, 6))
+        tk.Button(right, text="＋ Add person from a photo",
+                  command=self._add_person_from_photo, relief="flat", bg=PANEL, fg=GREEN,
+                  font=("Menlo", 11), cursor="hand2").pack(fill="x", pady=(0, 10))
 
         self._section(right, "▤ RECENT SIGHTINGS")
         self.sight_box = tk.Frame(right, bg=PANEL)
@@ -124,13 +129,17 @@ class Console:
     def _build_cam_buttons(self):
         for c in self.cam_btn_row.winfo_children():
             c.destroy()
+        grid_on = self.view == "grid"
+        tk.Button(self.cam_btn_row, text="▦ All", command=self._show_grid, relief="flat",
+                  bg=(GREEN if grid_on else PANEL), fg=("#04120d" if grid_on else TEXT),
+                  font=("Menlo", 11), cursor="hand2").pack(side="left", padx=(0, 6))
         for cid in self.cam_ids:
             name = next((c.name for c in self.cfg.cameras if c.id == cid), cid)
             fr = tk.Frame(self.cam_btn_row, bg=BG)
             fr.pack(side="left", padx=(0, 6))
-            active = cid == self.active
+            focused = cid == self.view
             tk.Button(fr, text=name, command=lambda c=cid: self._select(c), relief="flat",
-                      bg=(GREEN if active else PANEL), fg=("#04120d" if active else TEXT),
+                      bg=(GREEN if focused else PANEL), fg=("#04120d" if focused else TEXT),
                       activebackground=LINE, font=("Menlo", 11)).pack(side="left")
             tk.Button(fr, text="✕", command=lambda c=cid: self._remove_camera(c),
                       relief="flat", bg=PANEL, fg="#ff6b6b", font=("Menlo", 10),
@@ -138,6 +147,62 @@ class Console:
         tk.Button(self.cam_btn_row, text="＋ Add camera", command=self._open_add_camera_dialog,
                   relief="flat", bg=PANEL, fg=GREEN, font=("Menlo", 11),
                   cursor="hand2").pack(side="left", padx=(6, 0))
+
+    def _show_grid(self):
+        self.view = "grid"
+        self._rebuild_view()
+        self._build_cam_buttons()
+
+    def _rebuild_view(self):
+        """(Re)build the video area as a split-screen grid or a single feed."""
+        for c in self.stage.winfo_children():
+            c.destroy()
+        self.video_labels = {}
+        cams = self.cam_ids if self.view == "grid" else [self.view]
+        cams = [c for c in cams if c in self.workers]
+        if not cams:
+            tk.Label(self.stage, bg="#000", text="no cameras — add one below", fg=DIM,
+                     width=92, height=22, font=("Menlo", 13)).pack()
+            return
+        n = len(cams)
+        cols = 1 if n == 1 else (2 if n <= 4 else 3)
+        self._cell_w = max(240, (VIDEO_W - (cols + 1) * 4) // cols)
+        for i, cid in enumerate(cams):
+            r, c = divmod(i, cols)
+            name = next((cc.name for cc in self.cfg.cameras if cc.id == cid), cid)
+            cell = tk.Frame(self.stage, bg="#000", highlightthickness=1,
+                            highlightbackground=LINE)
+            cell.grid(row=r, column=c, padx=2, pady=2)
+            lbl = tk.Label(cell, bg="#000", text=f"{name}\nconnecting…", fg=DIM,
+                           font=("Menlo", 11), compound="center")
+            lbl.pack()
+            self.video_labels[cid] = lbl
+
+    def _add_person_from_photo(self):
+        if self.fm is None:
+            return
+        path = filedialog.askopenfilename(
+            title="Pick a clear photo of the person's face",
+            filetypes=[("Images", "*.jpg *.jpeg *.png *.webp *.bmp")])
+        if not path:
+            return
+        name = simpledialog.askstring("Name", "Who is this?", parent=self.root)
+        if not name or not name.strip():
+            return
+        img = cv2.imread(path)
+        if img is None:
+            messagebox.showerror("Add person", "Couldn't read that image file.")
+            return
+        faces = recognizer.detect(img)
+        if not faces:
+            messagebox.showerror("Add person", "No face found in that photo — try a clearer, closer one.")
+            return
+        face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+        with self.fm._lock:
+            crop = recognizer.crop_face(img, face)
+            self.fm.store.add(face.normed_embedding, crop, name=name.strip(), auto=False)
+        messagebox.showinfo("Add person",
+                            f"Added {name.strip()}. The cameras will now recognize them by name.")
 
     # ---------- camera management ----------
     def _next_cam_id(self):
@@ -174,7 +239,8 @@ class Console:
         self.cfg.cameras.append(cc)
         self._save_config()
         self.cam_ids = list(self.workers.keys())
-        self.active = cam_id
+        self.view = "grid"
+        self._rebuild_view()
         self._build_cam_buttons()
 
     def _remove_camera(self, cam_id):
@@ -190,8 +256,9 @@ class Console:
         self.cfg.cameras = [c for c in self.cfg.cameras if c.id != cam_id]
         self._save_config()
         self.cam_ids = list(self.workers.keys())
-        if self.active == cam_id:
-            self.active = self.cam_ids[0] if self.cam_ids else None
+        if self.view == cam_id:
+            self.view = "grid"
+        self._rebuild_view()
         self._build_cam_buttons()
 
     def _open_add_camera_dialog(self):
@@ -260,7 +327,8 @@ class Console:
                  font=("Menlo", 12, "bold")).pack(fill="x", pady=(4, 4))
 
     def _select(self, cid):
-        self.active = cid
+        self.view = cid
+        self._rebuild_view()
         self._build_cam_buttons()
 
     # ---------- video ----------
@@ -289,25 +357,33 @@ class Console:
     def _tick_video(self):
         if not self.running:
             return
-        w = self.workers.get(self.active)
-        frame = w.latest_raw() if w else None
-        if frame is not None:
+        online = 0
+        for cid, lbl in list(self.video_labels.items()):
+            w = self.workers.get(cid)
+            frame = w.latest_raw() if w else None
+            if w and w.online:
+                online += 1
+            if frame is None:
+                continue
             frame = frame.copy()
             tracks = w.tracks_payload().get("objects", [])
-            fw = self.face_workers.get(self.active)
+            fw = self.face_workers.get(cid)
             faces = fw.faces_payload().get("faces", []) if fw else []
             self._draw_overlays(frame, tracks, faces)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(rgb)
-            h = int(img.height * (VIDEO_W / img.width))
-            img = img.resize((VIDEO_W, h))
+            cw = self._cell_w
+            h = int(img.height * (cw / img.width))
+            img = img.resize((cw, h))
             imgtk = ImageTk.PhotoImage(img)
-            self.video.imgtk = imgtk
-            self.video.configure(image=imgtk, text="")
-            self.cam_label.configure(
-                text=f"{self.active} · {'ONLINE' if w.online else 'OFFLINE'}")
+            lbl.imgtk = imgtk
+            lbl.configure(image=imgtk, text="")
         self.clock.configure(text=time.strftime("%Y-%m-%d  %H:%M:%S"))
-        self.root.after(40, self._tick_video)
+        n = len(self.video_labels)
+        self.cam_label.configure(
+            text=(f"GRID · {n} camera{'s' if n != 1 else ''} · {online} online"
+                  if self.view == "grid" else f"{self.view} · {online} online"))
+        self.root.after(50, self._tick_video)
 
     # ---------- side panel ----------
     def _thumb(self, ident):
