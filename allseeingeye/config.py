@@ -84,12 +84,16 @@ class FaceConfig:
     # unknowns, log sightings. Runs on its own thread per camera.
     enabled: bool = True
     # Seconds between recognition passes per camera (throttle for live speed).
-    interval: float = 0.5
-    # Cosine similarity to count a face as the same known person.
-    threshold: float = 0.42
+    interval: float = 1.0
+    # Cosine similarity to count a face as the same known person. Lower = more
+    # lenient matching = fewer duplicate identities of one person.
+    threshold: float = 0.38
     # Don't log the same identity again within this many seconds (dedupe a
     # person who lingers in view).
     cooldown: float = 15.0
+    # Don't create a NEW unknown identity more than once per this many seconds —
+    # stops one person from spawning many duplicate "Unknown-N" in a burst.
+    enroll_cooldown: float = 4.0
     # Auto-enroll unknown faces as new identities so repeat visits are counted.
     auto_enroll: bool = True
     # Storage dir for identities + sightings ("" = <state_dir>/faces).

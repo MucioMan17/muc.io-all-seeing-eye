@@ -26,8 +26,9 @@ from insightface.app import FaceAnalysis
 
 MODEL_NAME = "buffalo_l"          # accurate; reuses the weights already cached
 KNOWN_THRESHOLD = 0.42            # cosine similarity to count as the same person
-MIN_FACE_PX = 60                  # ignore faces smaller than this (too far/blurry)
-MIN_SHARPNESS = 40.0             # Laplacian variance floor (reject motion blur)
+MIN_FACE_PX = 100                 # only identify faces at least this big (close/clear)
+MIN_SHARPNESS = 80.0             # Laplacian variance floor (reject motion blur)
+MIN_DET_SCORE = 0.65             # skip low-confidence detections (bad angles/partial)
 
 _app: Optional[FaceAnalysis] = None
 _app_lock = threading.Lock()
@@ -60,6 +61,10 @@ def face_quality(frame_bgr, face) -> Tuple[int, float]:
 
 
 def is_good_crop(frame_bgr, face) -> bool:
+    # Only trust faces that are confidently detected, big enough, and sharp —
+    # low-quality crops give inconsistent embeddings and spawn duplicate identities.
+    if float(getattr(face, "det_score", 1.0)) < MIN_DET_SCORE:
+        return False
     size, sharp = face_quality(frame_bgr, face)
     return size >= MIN_FACE_PX and sharp >= MIN_SHARPNESS
 

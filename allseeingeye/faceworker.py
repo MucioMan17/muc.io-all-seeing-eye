@@ -32,6 +32,7 @@ class FaceRecognizer:
         self.log = SightingLog(faces_dir)
         self._lock = threading.Lock()           # serialize store access
         self._last_logged: Dict[str, float] = {}
+        self._last_enroll: float = 0.0           # rate-limit new-identity creation
         self._alerts: deque = deque(maxlen=100)  # recent unknown-face alerts
 
     def _should_log(self, iid: str, now: float) -> bool:
@@ -56,9 +57,10 @@ class FaceRecognizer:
                 if idx is not None and score >= self.cfg.threshold:
                     identity = self.store.identities[idx]
                     status = "known"
-                elif self.cfg.auto_enroll:
+                elif self.cfg.auto_enroll and (now - self._last_enroll) >= self.cfg.enroll_cooldown:
                     crop = recognizer.crop_face(frame_bgr, face)
                     identity = self.store.add(emb, crop)   # new "Unknown-N"
+                    self._last_enroll = now
                     status = "unknown"
                     self._alerts.append({
                         "ts": now, "identity_id": identity["id"],
@@ -68,6 +70,8 @@ class FaceRecognizer:
                     log.info("camera %s: UNKNOWN face -> enrolled %s",
                              camera_id, identity["name"])
                 else:
+                    # Known-but-below-threshold, or enrollment is rate-limited:
+                    # show a transient "Unknown" box but don't create an identity.
                     identity, status = None, "unknown"
 
                 iid = identity["id"] if identity else None
