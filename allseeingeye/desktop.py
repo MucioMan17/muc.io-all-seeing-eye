@@ -61,6 +61,7 @@ class Console:
         self.view = "grid"          # "grid" = all cameras, or a cam_id for single view
         self.video_labels = {}      # cam_id -> the Label showing that feed
         self._cell_w = VIDEO_W
+        self._zoom = {}             # cam_id -> track_id currently zoomed/followed
         self._thumb_cache = {}
 
         root.title("All-Seeing Eye")
@@ -216,8 +217,15 @@ class Console:
         if not self.running:
             return
         try:
-            status = {"ts": time.time(), "view": self.view,
-                      "cameras": [c.name for c in self.cfg.cameras]}
+            cams = []
+            for c in self.cfg.cameras:
+                w = self.workers.get(c.id)
+                objs = sorted({t["label"] for t in (w.tracks_payload().get("objects", []) if w else [])
+                               if t["label"] != "motion"})
+                cams.append({"id": c.id, "name": c.name,
+                             "online": bool(w and w.online),
+                             "objects": objs, "zoomed": c.id in self._zoom})
+            status = {"ts": time.time(), "view": self.view, "cameras": cams}
             tmp = os.path.join(self._run_dir, "status.json.tmp")
             with open(tmp, "w") as f:
                 json.dump(status, f)
@@ -244,6 +252,21 @@ class Console:
             cid = self._find_cam_by_name(cmd.get("camera", ""))
             if cid:
                 self._select(cid)
+        elif action == "zoom":
+            cid = self._find_cam_by_name(cmd.get("camera", ""))
+            if cid is None and len(self.cam_ids) == 1:
+                cid = self.cam_ids[0]
+            if cid:
+                tid = self._find_track(cid, cmd.get("target", "person"))
+                if tid is not None:
+                    self._zoom[cid] = tid
+                    self._select(cid)      # focus that camera so the zoom is visible
+        elif action in ("unzoom", "zoom_out"):
+            cid = self._find_cam_by_name(cmd.get("camera", ""))
+            if cid:
+                self._zoom.pop(cid, None)
+            else:
+                self._zoom.clear()
         elif action == "quit":
             self.on_close()
 
@@ -256,6 +279,36 @@ class Console:
             if cn == name or name in cn or cn in name or c.id.lower() == name:
                 return c.id
         return None
+
+    @staticmethod
+    def _target_labels(target):
+        """Map a spoken target ('person', 'car', 'animal', 'dog'…) to YOLO labels."""
+        t = (target or "").lower().strip()
+        vehicles = {"bicycle", "car", "motorcycle", "bus", "train", "truck", "boat"}
+        animals = {"bird", "cat", "dog", "horse", "sheep", "cow",
+                   "elephant", "bear", "zebra", "giraffe"}
+        if t in ("person", "people", "someone", "somebody", "human", "man",
+                 "woman", "guy", "kid", "child"):
+            return {"person"}
+        if t in ("car", "vehicle", "truck", "van", "suv", "bus", "motorcycle", "bike", "bicycle"):
+            return vehicles
+        if t == "animal":
+            return animals
+        if t in vehicles or t in animals:
+            return {t}
+        return {t} if t else {"person"}
+
+    def _find_track(self, cid, target):
+        """Largest current track in camera `cid` matching the target class."""
+        w = self.workers.get(cid)
+        if not w:
+            return None
+        wanted = self._target_labels(target)
+        matches = [t for t in w.tracks_payload().get("objects", [])
+                   if t["label"] in wanted]
+        if not matches:
+            return None
+        return max(matches, key=lambda t: t["w"] * t["h"])["id"]
 
     # ---------- camera management ----------
     def _next_cam_id(self):
@@ -420,9 +473,27 @@ class Console:
                 continue
             frame = frame.copy()
             tracks = w.tracks_payload().get("objects", [])
-            fw = self.face_workers.get(cid)
-            faces = fw.faces_payload().get("faces", []) if fw else []
-            self._draw_overlays(frame, tracks, faces)
+
+            # Zoom: if this camera is locked onto an object, crop to it (follow
+            # it); release the lock when that object leaves the frame.
+            zoom_tid = self._zoom.get(cid)
+            zt = next((t for t in tracks if t["id"] == zoom_tid), None) if zoom_tid is not None else None
+            if zoom_tid is not None and zt is None:
+                self._zoom.pop(cid, None)
+            if zt is not None:
+                fh, fpw = frame.shape[:2]
+                x, y, bw, bh = zt["x"], zt["y"], zt["w"], zt["h"]
+                mx, my = int(bw * 0.4) + 12, int(bh * 0.4) + 12
+                x1, y1 = max(0, x - mx), max(0, y - my)
+                x2, y2 = min(fpw, x + bw + mx), min(fh, y + bh + my)
+                if x2 - x1 > 20 and y2 - y1 > 20:
+                    frame = frame[y1:y2, x1:x2].copy()
+                cv2.putText(frame, f"ZOOM: {zt['label']}", (8, 22),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (40, 190, 255), 2, cv2.LINE_AA)
+            else:
+                fw = self.face_workers.get(cid)
+                faces = fw.faces_payload().get("faces", []) if fw else []
+                self._draw_overlays(frame, tracks, faces)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(rgb)
             cw = self._cell_w
