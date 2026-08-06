@@ -105,13 +105,14 @@ class Console:
         body.pack(fill="both", expand=True, padx=16, pady=8)
 
         left = tk.Frame(body, bg=BG)
-        # Video area — filled with a grid (or single feed) by _rebuild_view().
-        self.stage = tk.Frame(left, bg=BG)
-        self.stage.pack()
-        tk.Label(self.stage, bg="#000", text="starting engine…", fg=DIM,
-                 width=92, height=22, font=("Menlo", 13)).pack()
+        # Camera buttons pinned to the bottom; the video stage fills everything
+        # above them and grows/shrinks with the window.
         self.cam_btn_row = tk.Frame(left, bg=BG)
-        self.cam_btn_row.pack(fill="x", pady=(8, 0))
+        self.cam_btn_row.pack(side="bottom", fill="x", pady=(8, 0))
+        self.stage = tk.Frame(left, bg=BG)
+        self.stage.pack(side="top", fill="both", expand=True)
+        tk.Label(self.stage, bg="#000", text="starting engine…", fg=DIM,
+                 font=("Menlo", 13)).pack(fill="both", expand=True)
 
         right = tk.Frame(body, bg=BG, width=340)
         right.pack(side="right", fill="y", padx=(14, 0))
@@ -163,29 +164,42 @@ class Console:
         self._build_cam_buttons()
 
     def _rebuild_view(self):
-        """(Re)build the video area as a split-screen grid or a single feed."""
+        """(Re)build the video area as a split-screen grid or a single feed.
+        Cells share the stage equally via grid weights, so the feeds fill the
+        window and re-tile automatically as cameras are added/removed."""
         for c in self.stage.winfo_children():
             c.destroy()
+        # Clear any grid weights left from a previous layout (e.g. 3-col grid
+        # -> single view), or stale empty columns would keep taking space.
+        for i in range(12):
+            self.stage.rowconfigure(i, weight=0, uniform="")
+            self.stage.columnconfigure(i, weight=0, uniform="")
         self.video_labels = {}
         cams = self.cam_ids if self.view == "grid" else [self.view]
         cams = [c for c in cams if c in self.workers]
         if not cams:
             tk.Label(self.stage, bg="#000", text="no cameras — add one below", fg=DIM,
-                     width=92, height=22, font=("Menlo", 13)).pack()
+                     font=("Menlo", 13)).grid(row=0, column=0, sticky="nsew")
+            self.stage.rowconfigure(0, weight=1)
+            self.stage.columnconfigure(0, weight=1)
             return
         n = len(cams)
         cols = 1 if n == 1 else (2 if n <= 4 else 3)
-        self._cell_w = max(240, (VIDEO_W - (cols + 1) * 4) // cols)
+        rows = (n + cols - 1) // cols
         for i, cid in enumerate(cams):
             r, c = divmod(i, cols)
             name = next((cc.name for cc in self.cfg.cameras if cc.id == cid), cid)
             cell = tk.Frame(self.stage, bg="#000", highlightthickness=1,
                             highlightbackground=LINE)
-            cell.grid(row=r, column=c, padx=2, pady=2)
+            cell.grid(row=r, column=c, padx=2, pady=2, sticky="nsew")
             lbl = tk.Label(cell, bg="#000", text=f"{name}\nconnecting…", fg=DIM,
                            font=("Menlo", 11), compound="center")
-            lbl.pack()
+            lbl.pack(fill="both", expand=True)
             self.video_labels[cid] = lbl
+        for r in range(rows):
+            self.stage.rowconfigure(r, weight=1, uniform="cell")
+        for c in range(cols):
+            self.stage.columnconfigure(c, weight=1, uniform="cell")
 
     def _add_person_from_photo(self):
         if self.fm is None:
@@ -542,9 +556,17 @@ class Console:
                 self._draw_overlays(frame, tracks, faces)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(rgb)
-            cw = self._cell_w
-            h = int(img.height * (cw / img.width))
-            img = img.resize((cw, h))
+            # Fit the feed into its cell's CURRENT size (letterboxed, aspect
+            # preserved), so feeds grow with the window and shrink as more
+            # cameras share the grid.
+            cell = lbl.master
+            avail_w = cell.winfo_width() - 4         # minus the 1px highlight border
+            avail_h = cell.winfo_height() - 4
+            if avail_w <= 1 or avail_h <= 1:
+                continue                             # not laid out yet this tick
+            scale = min(avail_w / img.width, avail_h / img.height)
+            img = img.resize((max(1, int(img.width * scale)),
+                              max(1, int(img.height * scale))))
             imgtk = ImageTk.PhotoImage(img)
             lbl.imgtk = imgtk
             lbl.configure(image=imgtk, text="")
