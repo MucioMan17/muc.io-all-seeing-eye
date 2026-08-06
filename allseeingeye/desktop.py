@@ -484,13 +484,20 @@ class Console:
             if zoom_tid is not None and zt is None:
                 self._zoom.pop(cid, None)
             if zt is not None:
-                fh, fpw = frame.shape[:2]
+                fh, fw = frame.shape[:2]
                 x, y, bw, bh = zt["x"], zt["y"], zt["w"], zt["h"]
-                mx, my = int(bw * 0.4) + 12, int(bh * 0.4) + 12
-                x1, y1 = max(0, x - mx), max(0, y - my)
-                x2, y2 = min(fpw, x + bw + mx), min(fh, y + bh + my)
-                if x2 - x1 > 20 and y2 - y1 > 20:
-                    frame = frame[y1:y2, x1:x2].copy()
+                cx, cy = x + bw / 2.0, y + bh / 2.0      # centre of the object
+                aspect = fw / float(fh)
+                # Crop a window centred on the object, big enough to frame it
+                # with padding, and KEEP THE FRAME'S ASPECT RATIO so it fills
+                # the cell instead of a tall sliver (which showed as "zoomed on
+                # the ceiling above the person").
+                ch = min(max(bh * 1.6, (bw * 1.6) / aspect) + 24, fh)
+                cw = min(ch * aspect, fw)
+                ch = cw / aspect                          # re-sync after width clamp
+                x1 = int(min(max(cx - cw / 2.0, 0), fw - cw))
+                y1 = int(min(max(cy - ch / 2.0, 0), fh - ch))
+                frame = frame[y1:y1 + int(ch), x1:x1 + int(cw)].copy()
                 cv2.putText(frame, f"ZOOM: {zt['label']}", (8, 22),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (40, 190, 255), 2, cv2.LINE_AA)
             else:
