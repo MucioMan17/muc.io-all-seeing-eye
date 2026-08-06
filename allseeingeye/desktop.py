@@ -11,6 +11,7 @@ Launch:  python -m allseeingeye.desktop --config config/local.yml
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import time
 import tkinter as tk
@@ -80,6 +81,10 @@ class Console:
         self._build_cam_buttons()
         self._tick_video()
         self._tick_panel()
+        # Bridge to the voice assistant via files in the run/ dir.
+        self._run_dir = os.path.dirname(os.path.abspath(self.cfg.recording.dir))
+        self._last_cmd_id = 0.0
+        self._tick_ai()
 
     # ---------- layout ----------
     def _build_ui(self):
@@ -203,6 +208,54 @@ class Console:
             self.fm.store.add(face.normed_embedding, crop, name=name.strip(), auto=False)
         messagebox.showinfo("Add person",
                             f"Added {name.strip()}. The cameras will now recognize them by name.")
+
+    # ---------- voice-assistant bridge (files in run/) ----------
+    def _tick_ai(self):
+        """Publish live status for the assistant, and run any queued command
+        (switch camera / show grid / quit)."""
+        if not self.running:
+            return
+        try:
+            status = {"ts": time.time(), "view": self.view,
+                      "cameras": [c.name for c in self.cfg.cameras]}
+            tmp = os.path.join(self._run_dir, "status.json.tmp")
+            with open(tmp, "w") as f:
+                json.dump(status, f)
+            os.replace(tmp, os.path.join(self._run_dir, "status.json"))
+        except Exception:
+            pass
+        try:
+            with open(os.path.join(self._run_dir, "ai_command.json")) as f:
+                cmd = json.load(f)
+            if float(cmd.get("id", 0)) > self._last_cmd_id:
+                self._last_cmd_id = float(cmd["id"])
+                self._run_ai_command(cmd)
+        except (FileNotFoundError, ValueError, KeyError, json.JSONDecodeError):
+            pass
+        except Exception:
+            pass
+        self.root.after(500, self._tick_ai)
+
+    def _run_ai_command(self, cmd):
+        action = cmd.get("action")
+        if action == "grid":
+            self._show_grid()
+        elif action == "switch":
+            cid = self._find_cam_by_name(cmd.get("camera", ""))
+            if cid:
+                self._select(cid)
+        elif action == "quit":
+            self.on_close()
+
+    def _find_cam_by_name(self, name):
+        name = (name or "").lower().strip()
+        if not name:
+            return None
+        for c in self.cfg.cameras:
+            cn = c.name.lower()
+            if cn == name or name in cn or cn in name or c.id.lower() == name:
+                return c.id
+        return None
 
     # ---------- camera management ----------
     def _next_cam_id(self):
