@@ -434,6 +434,13 @@ def main():
     args = ap.parse_args()
     cfg = load_config(args.config)
 
+    # The desktop app always stores its data under the project's own run/ folder,
+    # never the Raspberry Pi default (/var/lib/allseeingeye — which on Windows
+    # lands in C:\var\lib, away from the app and the assistant). Absolute path so
+    # it's independent of the working directory the app was launched from.
+    project = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cfg.recording.dir = os.path.join(project, "run", "recordings")
+
     root = tk.Tk()
     Console(root, cfg, args.config)
     root.lift()
