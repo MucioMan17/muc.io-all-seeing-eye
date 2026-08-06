@@ -84,7 +84,10 @@ class Console:
         self._tick_panel()
         # Bridge to the voice assistant via files in the run/ dir.
         self._run_dir = os.path.dirname(os.path.abspath(self.cfg.recording.dir))
-        self._last_cmd_id = 0.0
+        # Command ids are time.time() values; start from "now" so any command
+        # left in the file from a previous session (e.g. an old "quit") is
+        # treated as already-handled and can't close the app on startup.
+        self._last_cmd_id = time.time()
         self._tick_ai()
 
     # ---------- layout ----------
