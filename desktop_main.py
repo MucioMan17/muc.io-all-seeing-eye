@@ -14,6 +14,16 @@ os.environ.setdefault("OPENCV_LOG_LEVEL", "SILENT")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+# Send noisy C-level stderr (ffmpeg/h264 "SEI ... truncated" decoder warnings)
+# to a log file so the console stays clean however the app is launched. Real
+# errors still land in run/engine.log.
+try:
+    os.makedirs(os.path.join(HERE, "run"), exist_ok=True)
+    _errlog = open(os.path.join(HERE, "run", "engine.log"), "ab")
+    os.dup2(_errlog.fileno(), 2)
+except Exception:
+    pass
+
 if "--config" not in sys.argv:
     sys.argv += ["--config", os.path.join(HERE, "config", "local.yml")]
 
