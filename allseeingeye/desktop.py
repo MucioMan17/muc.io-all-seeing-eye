@@ -292,6 +292,15 @@ class Console:
                 self._zoom.pop(cid, None)
             else:
                 self._zoom.clear()
+        elif action == "rename":
+            iid = cmd.get("identity_id", "")
+            name = (cmd.get("name") or "").strip()
+            if iid and name and self.fm is not None:
+                self.fm.store.rename(iid, name)     # future matches show the name
+                try:
+                    self.fm.log.relabel(iid, name)  # fix up past sightings too
+                except Exception:
+                    pass
         elif action == "quit":
             self.on_close()
 

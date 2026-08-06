@@ -68,6 +68,36 @@ class SightingLog:
                 break
         return out
 
+    def relabel(self, identity_id: str, name: str) -> int:
+        """Rename all past sightings of one identity, so history reads
+        consistently after a face is given a real name. Returns rows changed."""
+        with self._lock:
+            try:
+                with open(self.path) as f:
+                    lines = f.readlines()
+            except FileNotFoundError:
+                return 0
+            out: List[str] = []
+            changed = 0
+            for line in lines:
+                s = line.strip()
+                if not s:
+                    continue
+                try:
+                    r = json.loads(s)
+                except json.JSONDecodeError:
+                    out.append(s)
+                    continue
+                if r.get("identity_id") == identity_id:
+                    r["name"] = name
+                    changed += 1
+                out.append(json.dumps(r))
+            tmp = self.path + ".tmp"
+            with open(tmp, "w") as f:
+                f.write("\n".join(out) + ("\n" if out else ""))
+            os.replace(tmp, self.path)
+            return changed
+
     def summary(self, day: Optional[str] = None) -> List[dict]:
         """Per-identity count + list of times for a given day (default today)."""
         day = day or datetime.now().strftime("%Y-%m-%d")
