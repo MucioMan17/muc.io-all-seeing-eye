@@ -301,6 +301,11 @@ class Console:
                     self.fm.log.relabel(iid, name)  # fix up past sightings too
                 except Exception:
                     pass
+        elif action == "delete":
+            iid = cmd.get("identity_id", "")
+            if iid and self.fm is not None:
+                self._zoom.pop(iid, None)           # drop any zoom lock (harmless)
+                self.fm.store.remove(iid)           # forget this face entirely
         elif action == "quit":
             self.on_close()
 
