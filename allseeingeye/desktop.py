@@ -235,17 +235,39 @@ class Console:
             os.replace(tmp, os.path.join(self._run_dir, "status.json"))
         except Exception:
             pass
+        # Drain queued commands. Each command is its own file in commands/, so
+        # rapid back-to-back commands (e.g. unzoom + grid) can't overwrite each
+        # other the way a single shared file did.
+        cmd_dir = os.path.join(self._run_dir, "commands")
         try:
-            with open(os.path.join(self._run_dir, "ai_command.json")) as f:
-                cmd = json.load(f)
-            if float(cmd.get("id", 0)) > self._last_cmd_id:
-                self._last_cmd_id = float(cmd["id"])
-                self._run_ai_command(cmd)
-        except (FileNotFoundError, ValueError, KeyError, json.JSONDecodeError):
-            pass
-        except Exception:
-            pass
-        self.root.after(500, self._tick_ai)
+            files = os.listdir(cmd_dir)
+        except OSError:
+            files = []
+        pending = []
+        for fn in files:
+            if not fn.endswith(".json"):
+                continue
+            p = os.path.join(cmd_dir, fn)
+            try:
+                with open(p) as f:
+                    pending.append((json.load(f), p))
+            except (ValueError, json.JSONDecodeError, OSError):
+                try:
+                    os.remove(p)          # unreadable / partial — drop it
+                except OSError:
+                    pass
+        for cmd, p in sorted(pending, key=lambda cp: float(cp[0].get("id", 0))):
+            try:
+                if float(cmd.get("id", 0)) > self._last_cmd_id:
+                    self._last_cmd_id = float(cmd["id"])
+                    self._run_ai_command(cmd)
+            except Exception:
+                pass
+            try:
+                os.remove(p)              # consume it either way
+            except OSError:
+                pass
+        self.root.after(150, self._tick_ai)
 
     def _run_ai_command(self, cmd):
         action = cmd.get("action")
