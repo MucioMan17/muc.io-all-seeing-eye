@@ -31,6 +31,13 @@ log = logging.getLogger(__name__)
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
+# Absolute free-space safety floor. The percentage ceiling (max_disk_percent)
+# is meaningful on a small Pi SD card but wrong on a large disk — 90% of a 1 TB
+# drive still leaves 100 GB, ample for motion clips. Keep recording as long as
+# at least this much space is free, regardless of percentage, so a big mostly-
+# full drive does not silently stop a security recorder.
+MIN_FREE_GB = 10.0
+
 
 class FfmpegClipWriter:
     """H.264 clip writer: pipes raw BGR frames into ffmpeg/libx264.
@@ -213,13 +220,31 @@ class ClipRecorder:
         self._writer: Optional[cv2.VideoWriter] = None
         self._event: Optional[dict] = None
         self._last_active = 0.0
+        self._last_disk_warn = 0.0
 
     def _disk_ok(self) -> bool:
         try:
             usage = shutil.disk_usage(self.cfg.dir)
-            return (usage.used / usage.total) * 100 < self.cfg.max_disk_percent
         except OSError:
             return False
+        pct_used = (usage.used / usage.total) * 100
+        free_gb = usage.free / (1024 ** 3)
+        # Record while under the percentage ceiling OR while a healthy absolute
+        # amount is still free (the floor keeps a large, mostly-full drive
+        # recording; on a tiny SD card the free space is gone before the floor
+        # is met, so the percentage ceiling still protects it).
+        if pct_used < self.cfg.max_disk_percent or free_gb >= MIN_FREE_GB:
+            return True
+        # Never fail silently: a security recorder that quietly stops is exactly
+        # how a night went unrecorded. Warn at most once every 5 minutes.
+        now = time.monotonic()
+        if now - self._last_disk_warn > 300:
+            self._last_disk_warn = now
+            log.warning("camera %s: recording PAUSED - disk %.1f%% full, only "
+                        "%.1f GB free (ceiling %d%%, floor %.0f GB)",
+                        self.camera_id, pct_used, free_gb,
+                        self.cfg.max_disk_percent, MIN_FREE_GB)
+        return False
 
     def feed(self, frame: np.ndarray, ts: float, active: bool) -> None:
         if not self.cfg.enabled:
