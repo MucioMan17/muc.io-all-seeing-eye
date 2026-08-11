@@ -38,6 +38,12 @@ class DetectConfig:
         "person", "car", "bus", "bicycle", "motorbike",
         "aeroplane", "bird", "cat", "dog",
     ])
+    # YOLO mode only: restrict which object classes trigger detection/recording
+    # for this camera, by COCO class name (e.g. ["person"] on a driveway so a
+    # parked or passing car — and wind-blown trees — never start a clip). Empty
+    # = the detector's default person/vehicle/animal set. (This is separate from
+    # `classes` above, which is the legacy list used only by `dnn` mode.)
+    keep: List[str] = field(default_factory=list)
     # Dead zones where detections are discarded (trees, street, neighbor's
     # yard). Rectangles in normalized 0..1 coordinates of the frame:
     #   ignore: [{x: 0.0, y: 0.0, w: 1.0, h: 0.35}]  # mute the top 35%

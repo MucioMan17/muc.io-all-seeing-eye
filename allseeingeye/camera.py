@@ -139,7 +139,8 @@ class CameraWorker(threading.Thread):
         when the model is ready."""
         try:
             from .detect import YoloDetector
-            self.dnn = YoloDetector(self.cfg.detect.yolo_model, self.cfg.detect.confidence)
+            self.dnn = YoloDetector(self.cfg.detect.yolo_model, self.cfg.detect.confidence,
+                                    keep=self.cfg.detect.keep)
             self.motion_sensitivity = 0  # YOLO replaces motion
             log.info("camera %s: YOLO object detection enabled (%s)",
                      self.cfg.id, self.cfg.detect.yolo_model)

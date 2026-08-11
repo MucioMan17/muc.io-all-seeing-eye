@@ -46,9 +46,14 @@ cameras:
   #   mac: "AA:BB:CC:DD:EE:FF"
   #   fps: 10
   #   detect:
-  #     mode: dnn
-  #     # default classes: person, car, bus, bicycle, motorbike,
-  #     # aeroplane, bird, cat, dog — set your own list to override
+  #     mode: yolo         # YOLO object detection (person / vehicle / animal)
+  #     # keep: only these COCO classes trigger recording on this camera. Use
+  #     # [person] on a driveway/street-facing camera so a parked or passing car
+  #     # (and wind-blown trees) never start a clip, while people still do.
+  #     # Omit to use the default person + vehicle + animal set.
+  #     keep: [person]
+  #     # (`classes` below is separate — it only applies to the legacy `dnn` mode:
+  #     #  person, car, bus, bicycle, motorbike, aeroplane, bird, cat, dog.)
   #
   # Reolink W-series:
   # - id: driveway

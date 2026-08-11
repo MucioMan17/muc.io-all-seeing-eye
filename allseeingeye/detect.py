@@ -266,11 +266,15 @@ class YoloDetector:
         "elephant", "bear", "zebra", "giraffe",
     }
 
-    def __init__(self, model: str = "yolo11n.pt", confidence: float = 0.4):
+    def __init__(self, model: str = "yolo11n.pt", confidence: float = 0.4,
+                 keep: Optional[List[str]] = None):
         from ultralytics import YOLO  # heavy import, only when this mode is used
         self.model = YOLO(model)
         self.confidence = confidence
         self.names = self.model.names
+        # Per-camera class filter (COCO names). Falls back to the default
+        # person/vehicle/animal set when not specified.
+        self.keep = set(keep) if keep else self.KEEP
 
     def detect(self, frame: np.ndarray) -> List[Detection]:
         results = self.model.predict(frame, conf=self.confidence, verbose=False)
@@ -279,7 +283,7 @@ class YoloDetector:
             return dets
         for box in results[0].boxes:
             label = self.names[int(box.cls)]
-            if label not in self.KEEP:
+            if label not in self.keep:
                 continue
             x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
             if x2 <= x1 or y2 <= y1:
