@@ -256,7 +256,7 @@ class CameraWorker(threading.Thread):
                 ts = time.time()
                 frame_i += 1
                 tracks = self._process(frame, ts, frame_i)
-                self.recorder.feed(frame, ts, active=len(tracks) > 0)
+                self.recorder.feed(frame, ts, active=len(tracks) > 0, tracks=tracks)
                 self._publish(frame, ts, tracks)
                 # Synthetic (and some USB) sources return frames instantly;
                 # pace to the configured fps so we don't burn a full core.

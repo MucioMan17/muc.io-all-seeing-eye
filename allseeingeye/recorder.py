@@ -3,7 +3,9 @@
 Each camera feeds every frame into a ClipRecorder. A short pre-roll ring
 buffer means the clip includes the seconds *before* motion started; the
 clip keeps rolling until motion has been absent for post_seconds. A JPEG
-snapshot is taken at trigger time for the event list thumbnails.
+snapshot is taken at trigger time for the event list thumbnails. Detected
+objects are drawn as labeled boxes onto the saved clip and snapshot (the
+live frame is left clean for face recognition and the MJPEG stream).
 
 Events are appended to events.jsonl in the recordings dir; a background
 sweep enforces the retention window and a disk-usage ceiling.
@@ -207,6 +209,47 @@ class EventLog:
                 self._rewrite(keep)
 
 
+BOX_COLOR = (0, 220, 0)  # BGR green
+
+
+def boxes_from_tracks(tracks) -> List[Tuple[int, int, int, int, str, float]]:
+    """Snapshot each track's geometry/label *now*, as plain tuples. The tracker
+    mutates its Track objects in place across frames, so storing references
+    would let a later frame move a box we've already buffered for an earlier
+    one."""
+    if not tracks:
+        return []
+    out = []
+    for t in tracks:
+        x, y, w, h = t.box
+        out.append((int(x), int(y), int(w), int(h), t.label, float(t.conf)))
+    return out
+
+
+def draw_boxes(frame: np.ndarray, boxes) -> np.ndarray:
+    """Return a copy of frame with a labeled box drawn for each detection.
+    The original frame is left untouched (face recognition and the live MJPEG
+    stream use the clean frame; only the recorded clip/snapshot get boxes)."""
+    if not boxes:
+        return frame
+    out = frame.copy()
+    w = out.shape[1]
+    thick = max(2, round(w / 640))        # scale to the frame's resolution
+    text_thick = max(1, thick // 2)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fs = max(0.4, w / 1600.0)
+    for x, y, bw, bh, label, conf in boxes:
+        cv2.rectangle(out, (x, y), (x + bw, y + bh), BOX_COLOR, thick)
+        text = f"{label} {conf:.0%}"
+        (tw, th), base = cv2.getTextSize(text, font, fs, text_thick)
+        y0 = y - th - base - 2
+        if y0 < 0:                        # box hugs the top edge — label inside
+            y0 = y + 2
+        cv2.rectangle(out, (x, y0), (x + tw, y0 + th + base), BOX_COLOR, -1)
+        cv2.putText(out, text, (x, y0 + th), font, fs, (0, 0, 0), text_thick, cv2.LINE_AA)
+    return out
+
+
 class ClipRecorder:
     def __init__(self, camera_id: str, cfg: RecordingConfig, fps: int, event_log: EventLog):
         self.camera_id = camera_id
@@ -216,7 +259,7 @@ class ClipRecorder:
         self.dir = os.path.join(cfg.dir, camera_id)
         os.makedirs(self.dir, exist_ok=True)
 
-        self._prebuffer: Deque[Tuple[float, np.ndarray]] = deque()
+        self._prebuffer: Deque[Tuple[float, np.ndarray, list]] = deque()
         self._writer: Optional[cv2.VideoWriter] = None
         self._event: Optional[dict] = None
         self._last_active = 0.0
@@ -246,19 +289,20 @@ class ClipRecorder:
                         self.cfg.max_disk_percent, MIN_FREE_GB)
         return False
 
-    def feed(self, frame: np.ndarray, ts: float, active: bool) -> None:
+    def feed(self, frame: np.ndarray, ts: float, active: bool, tracks=None) -> None:
         if not self.cfg.enabled:
             return
 
+        boxes = boxes_from_tracks(tracks)
         if self._writer is None:
-            self._prebuffer.append((ts, frame))
+            self._prebuffer.append((ts, frame, boxes))
             while self._prebuffer and ts - self._prebuffer[0][0] > self.cfg.pre_seconds:
                 self._prebuffer.popleft()
 
             if active and self._disk_ok():
-                self._start(frame, ts)
+                self._start(frame, ts, boxes)
         else:
-            self._writer.write(frame)
+            self._writer.write(draw_boxes(frame, boxes))
             if active:
                 self._last_active = ts
             elif ts - self._last_active > self.cfg.post_seconds:
@@ -269,7 +313,7 @@ class ClipRecorder:
                 # (a follow-on clip starts on the next active frame).
                 self._stop(ts)
 
-    def _start(self, frame: np.ndarray, ts: float) -> None:
+    def _start(self, frame: np.ndarray, ts: float, boxes) -> None:
         eid = time.strftime("%Y%m%d-%H%M%S", time.localtime(ts)) + "-" + uuid.uuid4().hex[:6]
         video_rel = os.path.join(self.camera_id, eid + ".mp4")
         snap_rel = os.path.join(self.camera_id, eid + ".jpg")
@@ -278,9 +322,9 @@ class ClipRecorder:
         if not writer.isOpened():
             log.error("camera %s: failed to open clip writer", self.camera_id)
             return
-        cv2.imwrite(os.path.join(self.cfg.dir, snap_rel), frame)
-        for _, buffered in self._prebuffer:
-            writer.write(buffered)
+        cv2.imwrite(os.path.join(self.cfg.dir, snap_rel), draw_boxes(frame, boxes))
+        for _, buffered, bboxes in self._prebuffer:
+            writer.write(draw_boxes(buffered, bboxes))
         self._prebuffer.clear()
         self._writer = writer
         self._last_active = ts
