@@ -32,15 +32,20 @@ and logged locally.
   labeled boxes for people, cars/trucks/buses/bikes, and animals — separate from
   the named face boxes.
 - **GPU (strongly recommended for YOLO):** installing `requirements-app.txt` gets
-  a **CPU** build of PyTorch, so YOLO will be choppy. To use your NVIDIA GPU
-  (much smoother), install the CUDA build of torch into the venv:
+  a **CPU** build of PyTorch, so YOLO runs on the CPU. To use your NVIDIA GPU,
+  install the CUDA build of the *same* torch/torchvision versions into the venv
+  (pin the versions so ultralytics isn't downgraded), choosing a CUDA build no
+  newer than the "CUDA Version" shown by `nvidia-smi`:
   ```
   .venv\Scripts\activate
-  pip uninstall -y torch torchvision
-  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+  REM check your torch version first:  python -c "import torch; print(torch.__version__)"
+  REM cu130 build, verified on an RTX 3060 (driver CUDA 13.1):
+  pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.13.0+cu130 torchvision==0.28.0+cu130
   ```
-  YOLO then uses the GPU automatically. (Face detection still uses `onnxruntime`
-  on CPU, which is fine; swap to `onnxruntime-gpu` later if you want.)
+  YOLO then uses the GPU automatically (`torch.cuda.is_available()` is `True`).
+  The per-launch `pip install -r requirements-app.txt` leaves this in place (it
+  never downgrades an already-satisfied torch). Face detection still uses
+  `onnxruntime` on CPU, which is fine; swap to `onnxruntime-gpu` later if you want.
 - **Recorded-clip playback (optional):** install `ffmpeg` and put it on PATH.
 - The data the app writes — identities and a `sightings.jsonl` log — lives under
   `run/faces/`. That's what the voice assistant will read to answer questions
