@@ -53,6 +53,10 @@ class FakeEngine:
     def latest_clip(self, cam_id=None):
         return ("/tmp/clip.mp4", {"camera": "cam1"})
 
+    def clear_footage(self):
+        self.cleared = getattr(self, "cleared", 0) + 1
+        return 7
+
 
 def make_bot(chat_id="42", cooldown=30):
     cfg = AppConfig(
@@ -136,3 +140,16 @@ def test_status_reports_state():
     bot, client = make_bot()
     bot.handle_update(msg("/status"))
     assert client.messages and "Driveway" in client.messages[-1][1]
+
+
+def test_clear_deletes_footage_and_reports_count():
+    bot, client = make_bot()
+    bot.handle_update(msg("/clear"))
+    assert bot.engine.cleared == 1
+    assert client.messages and "7 clips" in client.messages[-1][1]
+
+
+def test_clear_only_from_authorized_chat():
+    bot, _ = make_bot(chat_id="42")
+    bot.handle_update(msg("/clear", chat="999"))
+    assert getattr(bot.engine, "cleared", 0) == 0   # destructive cmd blocked

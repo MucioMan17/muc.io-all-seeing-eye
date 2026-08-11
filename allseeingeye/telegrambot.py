@@ -211,6 +211,7 @@ class TelegramBot:
             "/photo [cam] – live snapshot\n"
             "/cameras – list cameras\n"
             "/clip [cam] – last recorded clip\n"
+            "/clear – delete ALL recorded footage\n"
             "/mute [min] – pause alerts\n"
             "/unmute – resume alerts")
 
@@ -260,6 +261,10 @@ class TelegramBot:
         self.notify("Uploading last clip…")
         self.client.send_video(self.chat_id, path,
                                caption=self._names.get(ev.get("camera"), ev.get("camera")))
+
+    def _cmd_clear(self, arg):
+        n = self.engine.clear_footage()
+        self.notify(f"\U0001f5d1 Cleared all footage — {n} clip{'' if n == 1 else 's'} removed.")
 
     def _cmd_mute(self, arg):
         mins = 60

@@ -110,6 +110,28 @@ class WatchEngine:
                     return path, ev
         return None, None
 
+    def clear_footage(self) -> int:
+        """Delete every recorded clip + snapshot from all cameras and empty the
+        event index. Returns the number of video clips removed. A clip that is
+        being written right now is open and can't be deleted, so it's skipped."""
+        clips = 0
+        for cam in self.cfg.cameras:
+            d = os.path.join(self.recordings_dir, cam.id)
+            if not os.path.isdir(d):
+                continue
+            for fn in os.listdir(d):
+                low = fn.lower()
+                if not low.endswith((".mp4", ".jpg", ".jpeg")):
+                    continue
+                try:
+                    os.remove(os.path.join(d, fn))
+                    if low.endswith(".mp4"):
+                        clips += 1
+                except OSError:
+                    pass  # e.g. the clip currently being recorded
+        self.events.clear()  # media is gone; empty the (now dangling) index
+        return clips
+
     def status(self) -> dict:
         with self._lock:
             cams = {cid: {"name": w.cfg.name, "online": bool(w.online)}
