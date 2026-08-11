@@ -89,11 +89,11 @@ class SyntheticSource:
 
 class CameraWorker(threading.Thread):
     def __init__(self, cfg: CameraConfig, rec_cfg: RecordingConfig,
-                 event_log: EventLog, models_dir: str):
+                 event_log: EventLog, models_dir: str, on_event=None):
         super().__init__(name=f"camera-{cfg.id}", daemon=True)
         self.cfg = cfg
         self.tracker = CentroidTracker()
-        self.recorder = ClipRecorder(cfg.id, rec_cfg, cfg.fps, event_log)
+        self.recorder = ClipRecorder(cfg.id, rec_cfg, cfg.fps, event_log, on_event=on_event)
         self._stop = threading.Event()
         self._known_ip: Optional[str] = None
 

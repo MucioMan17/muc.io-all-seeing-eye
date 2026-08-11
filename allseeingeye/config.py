@@ -107,6 +107,23 @@ class FaceConfig:
 
 
 @dataclass
+class TelegramConfig:
+    # Remote control + detection alerts over a Telegram bot. Outbound HTTPS
+    # long-polling only (no open ports). token + chat_id belong in the
+    # gitignored local config — the token is a secret, never commit or log it.
+    enabled: bool = False
+    token: str = ""
+    chat_id: str = ""
+    # Push a photo to chat on each recording event.
+    alerts: bool = True
+    # Minimum seconds between photo alerts per camera (dedupe a lingering
+    # subject and back-to-back events).
+    alert_cooldown: float = 30.0
+    # Begin watch mode as soon as the bot starts (vs waiting for /watch_on).
+    start_watching: bool = True
+
+
+@dataclass
 class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 8080
@@ -134,6 +151,7 @@ class AppConfig:
     remote_sites: List[SiteLink] = field(default_factory=list)
     models_dir: str = DEFAULT_MODELS_DIR
     faces: FaceConfig = field(default_factory=FaceConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
 
 def _build(cls, data: dict) -> Any:
@@ -157,6 +175,8 @@ def load_config(path: Optional[str]) -> AppConfig:
         cfg.recording = _build(RecordingConfig, data["recording"])
     if "faces" in data:
         cfg.faces = _build(FaceConfig, data["faces"])
+    if "telegram" in data:
+        cfg.telegram = _build(TelegramConfig, data["telegram"])
     for cam in data.get("cameras", []):
         cam = dict(cam)
         detect = cam.pop("detect", {})

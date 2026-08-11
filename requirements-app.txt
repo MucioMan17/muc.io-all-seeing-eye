@@ -13,3 +13,5 @@ uvicorn[standard]
 # YOLO object detection (person / vehicle / animal). Pulls in PyTorch.
 # For NVIDIA GPU speed, install the CUDA build of torch separately (see WINDOWS.md).
 ultralytics
+# Telegram bot (--bot): remote control + detection photo alerts over HTTPS.
+requests

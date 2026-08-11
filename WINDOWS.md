@@ -50,3 +50,21 @@ and logged locally.
 - The data the app writes — identities and a `sightings.jsonl` log — lives under
   `run/faces/`. That's what the voice assistant will read to answer questions
   about who's been seen.
+
+## Telegram bot (control + alerts from your phone)
+
+`bot-windows.bat` runs night-watch **plus** a Telegram bot: it records events like
+`watch-windows.bat` and also lets you control the system and receive a photo in chat
+whenever a person is detected. It uses outbound HTTPS only — no port-forwarding.
+Use it *instead of* `watch-windows.bat` (don't run both, or the cameras get opened
+twice and every event records twice).
+
+Setup (once):
+1. In Telegram, message **@BotFather** → `/newbot` → copy the **token**.
+2. In `config/local.yml`, set `telegram.enabled: true` and paste the `token`.
+   (`local.yml` is git-ignored, so the token stays on your machine — never commit it.)
+3. Run `bot-windows.bat`, then message your new bot `/status`. It replies with your
+   **chat_id** — paste that into `telegram.chat_id` and restart the bot.
+
+Commands: `/status`, `/watch_on`, `/watch_off`, `/photo [cam]`, `/cameras`,
+`/clip [cam]`, `/mute [minutes]`, `/unmute`. Only your `chat_id` can control the bot.

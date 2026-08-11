@@ -251,11 +251,16 @@ def draw_boxes(frame: np.ndarray, boxes) -> np.ndarray:
 
 
 class ClipRecorder:
-    def __init__(self, camera_id: str, cfg: RecordingConfig, fps: int, event_log: EventLog):
+    def __init__(self, camera_id: str, cfg: RecordingConfig, fps: int, event_log: EventLog,
+                 on_event=None):
         self.camera_id = camera_id
         self.cfg = cfg
         self.fps = max(1, fps)
         self.events = event_log
+        # Optional callback fired when a recording starts: on_event(event_dict,
+        # snapshot_abspath). Used to push detection alerts (e.g. Telegram). Kept
+        # off the hot path — the callback must return quickly and never raise.
+        self.on_event = on_event
         self.dir = os.path.join(cfg.dir, camera_id)
         os.makedirs(self.dir, exist_ok=True)
 
@@ -322,7 +327,8 @@ class ClipRecorder:
         if not writer.isOpened():
             log.error("camera %s: failed to open clip writer", self.camera_id)
             return
-        cv2.imwrite(os.path.join(self.cfg.dir, snap_rel), draw_boxes(frame, boxes))
+        snap_abs = os.path.join(self.cfg.dir, snap_rel)
+        cv2.imwrite(snap_abs, draw_boxes(frame, boxes))
         for _, buffered, bboxes in self._prebuffer:
             writer.write(draw_boxes(buffered, bboxes))
         self._prebuffer.clear()
@@ -334,8 +340,15 @@ class ClipRecorder:
             "start": ts,
             "video": video_rel,
             "snapshot": snap_rel,
+            # What triggered the clip, for the event list and alert captions.
+            "labels": sorted({b[4] for b in boxes}),
         }
         log.info("camera %s: recording event %s", self.camera_id, eid)
+        if self.on_event is not None:
+            try:
+                self.on_event(dict(self._event), snap_abs)
+            except Exception:
+                log.exception("camera %s: on_event callback failed", self.camera_id)
 
     def _stop(self, ts: float) -> None:
         if self._writer is not None:

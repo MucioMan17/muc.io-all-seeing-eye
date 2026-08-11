@@ -20,6 +20,50 @@ from .faceworker import FaceRecognizer, FaceWorker
 from .recorder import EventLog, start_retention_thread
 
 
+def _run_lite(cfg, log) -> None:
+    """Night-watch: the record-only WatchEngine, no web server, no faces."""
+    from .engine import WatchEngine
+    engine = WatchEngine(cfg)
+    engine.start_watch()
+    log.info("Night watch active — %d camera(s) recording. Press Ctrl+C to stop.",
+             len(cfg.cameras))
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        engine.stop_watch()
+
+
+def _run_bot(cfg, log) -> None:
+    """Telegram bot: the WatchEngine plus remote control and photo alerts."""
+    from .engine import WatchEngine
+    from .telegrambot import TelegramBot
+    if not cfg.telegram.token:
+        log.error("Telegram bot needs telegram.token in the config "
+                  "(see config.example.yml). Nothing to run.")
+        return
+    cfg.faces.enabled = False
+    engine = WatchEngine(cfg)
+    bot = TelegramBot(cfg, engine)
+    engine.set_on_event(bot.on_event)   # applied to workers on start_watch()
+    bot.start()
+    bot.notify("\U0001f7e2 All-Seeing Eye bot online.")
+    log.info("Telegram bot online (Ctrl+C to stop).")
+    if cfg.telegram.start_watching:
+        engine.start_watch()
+        bot.notify("\U0001f440 Watch mode ON.")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        engine.stop_watch()
+        bot.stop()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="allseeingeye", description="All-Seeing Eye camera engine")
     parser.add_argument("--config", default="/etc/allseeingeye/config.yml",
@@ -27,6 +71,9 @@ def main() -> None:
     parser.add_argument("--lite", action="store_true",
                         help="night-watch mode: record events only, no face recognition and no "
                              "web server — much lighter on the CPU, safe to leave running 24/7")
+    parser.add_argument("--bot", action="store_true",
+                        help="run the Telegram bot: night-watch plus remote control and photo "
+                             "alerts from chat (needs telegram.token in the config)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -42,9 +89,16 @@ def main() -> None:
     project = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cfg.recording.dir = os.path.join(project, "run", "recordings")
 
+    # --bot / --lite both run the lightweight record-only engine (WatchEngine):
+    # no web server, no face recognition. --bot adds Telegram remote control.
+    if args.bot:
+        _run_bot(cfg, log)
+        return
     if args.lite:
         cfg.faces.enabled = False          # skip InsightFace — the heavy part
         log.info("NIGHT-WATCH (lite): recording events only, face recognition OFF")
+        _run_lite(cfg, log)
+        return
 
     events = EventLog(cfg.recording.dir)
     start_retention_thread(events, cfg.recording)
@@ -88,21 +142,6 @@ def main() -> None:
             fw = FaceWorker(worker, face_manager, cfg.faces)
             fw.start()
             face_workers[cam_id] = fw
-
-    if args.lite:
-        # No web server in night-watch mode — just keep the engine running and
-        # recording. (Skips importing fastapi/uvicorn entirely.)
-        log.info("Night watch active — %d camera(s) recording. Press Ctrl+C to stop.",
-                 len(workers))
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            for worker in workers.values():
-                worker.stop()
-        return
 
     # Normal mode: serve the web UI (imported lazily so --lite needs neither).
     import uvicorn

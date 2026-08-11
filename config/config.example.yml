@@ -75,6 +75,21 @@ recording:
   retention_days: 14
   max_disk_percent: 90 # stop starting new clips when the disk is this full
 
+# Telegram bot (optional): control watch mode and get detection photos from
+# chat. Run with `--bot` (Windows: bot-windows.bat). Outbound HTTPS only — no
+# port-forwarding. The token is a SECRET: keep it in config/local.yml (which is
+# git-ignored) and never commit it.
+#   1. In Telegram, message @BotFather -> /newbot -> copy the token.
+#   2. Start the bot, then message it /status — it replies with your chat_id.
+#   3. Paste token + chat_id here and restart.
+# telegram:
+#   enabled: true
+#   token: "123456789:AA...your-bot-token..."
+#   chat_id: "111222333"
+#   alerts: true          # push a photo to chat on each detection
+#   alert_cooldown: 30    # min seconds between photo alerts per camera
+#   start_watching: true  # begin watch mode as soon as the bot launches
+
 # The other house: link its All-Seeing Eye node in this UI's header.
 # Reach it over Tailscale/WireGuard — see docs/MULTISITE.md.
 remote_sites: []
